@@ -671,8 +671,8 @@ const KEY = 'aj_financials_v3';
 const SB_KEY = 'aj_supabase_config';
 
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||defaultData();}catch{return defaultData();}}
-function save(d){localStorage.setItem(KEY,JSON.stringify(d));}
-function loadSBConfig(){try{return JSON.parse(localStorage.getItem(SB_KEY))||{url:'',key:'',syncAR:true,syncAP:true,syncJobs:true,syncPayroll:true};}catch{return{url:'',key:'',syncAR:true,syncAP:true,syncJobs:true,syncPayroll:true};}}
+function save(d){localStorage.setItem(KEY,JSON.stringify(d));clearTimeout(window.__syncTimer);window.__syncTimer=setTimeout(()=>{if(sbConfig&&sbConfig.url&&sbConfig.key)syncToSupabase(true);},1500);}
+function loadSBConfig(){const D={url:'https://zottjoyiczglrkaodjfr.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdHRqb3lpY3pnbHJrYW9kamZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNDk3NTAsImV4cCI6MjA4OTgyNTc1MH0.5LycZbEK23JVyHPvSG3JHqLwumoFLDCkZzLQ4ERLqTE',syncAR:true,syncAP:true,syncJobs:true,syncPayroll:true};try{const s=JSON.parse(localStorage.getItem(SB_KEY));return s&&s.url?s:D;}catch{return D;}}
 function saveSBConfig(c){localStorage.setItem(SB_KEY,JSON.stringify(c));}
 
 function defaultData(){
@@ -767,8 +767,8 @@ async function sbUpsert(table,rows,urlOverride,keyOverride){
   return fetch(url,{method:'POST',headers:{'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
 }
 
-async function syncToSupabase(){
-  if(!sbConfig.url||!sbConfig.key){toast('Configure Supabase first.','error');openSupabaseConfig();return;}
+async function syncToSupabase(silent){
+  if(!sbConfig.url||!sbConfig.key){if(!silent){toast('Configure Supabase first.','error');openSupabaseConfig();}return;}
   $('syncDot').className='sync-dot syncing';$('syncLabel').textContent='Syncing...';
   try{
     const tasks=[];
@@ -778,8 +778,8 @@ async function syncToSupabase(){
     if(sbConfig.syncPayroll) tasks.push(sbUpsert('aj_payroll',db.payroll));
     await Promise.all(tasks);
     sbConfig.lastSync=new Date().toISOString();saveSBConfig(sbConfig);
-    updateSyncUI();toast('Synced to Supabase successfully!','success');
-  }catch(e){updateSyncUI();toast('Sync failed: '+e.message,'error');}
+    updateSyncUI();if(!silent)toast('Synced to Supabase successfully!','success');
+  }catch(e){updateSyncUI();if(!silent)toast('Sync failed: '+e.message,'error');}
 }
 
 // ─── EXPORTS ────────────────────────────────────────────────────────────────
@@ -2936,11 +2936,41 @@ function saveImportedInvoice(){
   }
 }
 
+
+async function loadFromSupabase(){
+  if(!sbConfig||!sbConfig.url||!sbConfig.key)return;
+  $('syncDot').className='sync-dot syncing';$('syncLabel').textContent='Loading...';
+  try{
+    const H={'apikey':sbConfig.key,'Authorization':'Bearer '+sbConfig.key};
+    const [arR,apR,jobsR,payR]=await Promise.all([
+      sbConfig.syncAR    ?fetch(sbConfig.url+'/rest/v1/aj_ar?select=*&order=invoiceDate.desc',{headers:H}).then(r=>r.json()):Promise.resolve(null),
+      sbConfig.syncAP    ?fetch(sbConfig.url+'/rest/v1/aj_ap?select=*&order=billDate.desc',{headers:H}).then(r=>r.json()):Promise.resolve(null),
+      sbConfig.syncJobs  ?fetch(sbConfig.url+'/rest/v1/aj_jobs?select=*',{headers:H}).then(r=>r.json()):Promise.resolve(null),
+      sbConfig.syncPayroll?fetch(sbConfig.url+'/rest/v1/aj_payroll?select=*',{headers:H}).then(r=>r.json()):Promise.resolve(null),
+    ]);
+    let changed=false;
+    if(Array.isArray(arR)   &&arR.length>0)  {db.ar=arR;      changed=true;}
+    if(Array.isArray(apR)   &&apR.length>0)  {db.ap=apR;      changed=true;}
+    if(Array.isArray(jobsR) &&jobsR.length>0){db.jobs=jobsR;  changed=true;}
+    if(Array.isArray(payR)  &&payR.length>0) {db.payroll=payR;changed=true;}
+    if(changed)localStorage.setItem('aj_financials_v3',JSON.stringify(db));
+    $('syncDot').className='sync-dot connected';
+    $('syncLabel').textContent='Live Sync';
+    $('syncNowBtn').style.display='inline-flex';
+    renderDashboard();
+    console.log('SB_LOAD_OK AR:'+(arR&&arR.length||0)+' AP:'+(apR&&apR.length||0)+' Jobs:'+(jobsR&&jobsR.length||0));
+  }catch(e){
+    $('syncDot').className='sync-dot';
+    $('syncLabel').textContent='Offline Mode';
+    console.warn('SB_LOAD_FAIL:',e.message);
+  }
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 updateSyncUI();
 renderDashboard();
-// Auto-load bridge in background so Job P&L reflects Takeoff data immediately
 loadBridgeProjects();
+setTimeout(loadFromSupabase,800);
 </script>
 </body>
 </html>
