@@ -358,6 +358,7 @@ select option{background:var(--navy-mid);}
       <button class="btn btn-primary" onclick="openModal('ar')">+ New Invoice</button>
     </div>
   </div>
+  <div id="ar-dash" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
   <div class="filters">
     <input class="filter-input" id="ar-search" placeholder="Search client / invoice #" oninput="renderAR()">
     <select class="filter-input" id="ar-status" onchange="renderAR()">
@@ -386,6 +387,7 @@ select option{background:var(--navy-mid);}
       <button class="btn btn-primary" onclick="openModal('ap')">+ New Bill</button>
     </div>
   </div>
+  <div id="ap-dash" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
   <div class="filters">
     <input class="filter-input" id="ap-search" placeholder="Search vendor / bill #" oninput="renderAP()">
     <select class="filter-input" id="ap-status" onchange="renderAP()">
@@ -909,7 +911,12 @@ function buildAgingDonut(){
 }
 
 // ─── AR ─────────────────────────────────────────────────────────────────────
+
+function statCard(label,value,color,sub){return '<div style="background:var(--navy-light);border:1px solid var(--navy-border);border-radius:10px;padding:14px 16px;"><div style="font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">'+label+'</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;line-height:1;color:'+color+';">'+value+'</div>'+(sub?'<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">'+sub+'</div>':'')+'</div>';}
+function renderARDash(){const el=$('ar-dash');if(!el)return;const today=new Date().toISOString().split('T')[0];const inv=db.ar||[];const tb=inv.reduce((s,i)=>s+(i.amount||0),0);const tc=inv.reduce((s,i)=>s+(i.paid||0),0);const tr=inv.reduce((s,i)=>s+Math.round((i.amount||0)*(i.retention||0)/100),0);const to=inv.reduce((s,i)=>{const n=(i.amount||0)-Math.round((i.amount||0)*(i.retention||0)/100);return s+Math.max(0,n-(i.paid||0));},0);const tod=inv.filter(i=>i.dueDate&&i.dueDate<today&&i.status!=='paid');const todAmt=tod.reduce((s,i)=>{const n=(i.amount||0)-Math.round((i.amount||0)*(i.retention||0)/100);return s+Math.max(0,n-(i.paid||0));},0);const cp=tb>0?Math.round(tc/tb*100):0;const lc=inv.filter(i=>i.lien&&i.lien!=='none').length;const pk=inv.filter(i=>i.status==='paid').length;el.innerHTML=[statCard('Total Billed',fmt$(tb),'var(--white)',inv.length+' invoice'+(inv.length!==1?'s':'')),statCard('Collected',fmt$(tc),'var(--green)',cp+'% of billed'),statCard('Outstanding',fmt$(to),to>0?'var(--sky)':'var(--green)',inv.filter(i=>i.status!=='paid').length+' open'),statCard('Retention Held',tr>0?fmt$(tr):'$0','var(--gold)',tr>0?'Pending release':'None held'),statCard('Overdue',fmt$(todAmt),todAmt>0?'var(--red)':'var(--green)',tod.length+' invoice'+(tod.length!==1?'s':'')),statCard('Paid',pk,'var(--text-muted)','of '+inv.length+' total'),lc>0?statCard('Lien Actions',lc,'#e888cc',lc+' active'):''].filter(Boolean).join('');}
+function renderAPDash(){const el=$('ap-dash');if(!el)return;const today=new Date().toISOString().split('T')[0];const d7=new Date();d7.setDate(d7.getDate()+7);const week=d7.toISOString().split('T')[0];const bills=db.ap||[];const tb=bills.reduce((s,b)=>s+(b.amount||0),0);const tp=bills.filter(b=>b.status==='paid').reduce((s,b)=>s+(b.amount||0),0);const to=bills.filter(b=>b.status!=='paid').reduce((s,b)=>s+(b.amount||0),0);const tod=bills.filter(b=>b.dueDate&&b.dueDate<today&&b.status!=='paid');const todAmt=tod.reduce((s,b)=>s+(b.amount||0),0);const wk=bills.filter(b=>b.dueDate&&b.dueDate>=today&&b.dueDate<=week&&b.status!=='paid');const wkAmt=wk.reduce((s,b)=>s+(b.amount||0),0);const pp=tb>0?Math.round(tp/tb*100):0;const pk=bills.filter(b=>b.status==='paid').length;el.innerHTML=[statCard('Total AP',fmt$(tb),'var(--white)',bills.length+' bill'+(bills.length!==1?'s':'')),statCard('Paid',fmt$(tp),'var(--green)',pp+'% of total'),statCard('Outstanding',fmt$(to),to>0?'var(--sky)':'var(--green)',bills.filter(b=>b.status!=='paid').length+' open'),statCard('Overdue',fmt$(todAmt),todAmt>0?'var(--red)':'var(--green)',tod.length+' bill'+(tod.length!==1?'s':'')),statCard('Due This Week',fmt$(wkAmt),wkAmt>0?'var(--gold)':'var(--green)',wk.length+' bill'+(wk.length!==1?'s':'')),statCard('Paid Bills',pk,'var(--text-muted)','of '+bills.length+' total')].join('');}
 function renderAR(){
+  renderARDash();
   const search=(($('ar-search')||{}).value||'').toLowerCase();
   const status=($('ar-status')||{}).value||'';
   const lien=($('ar-lien')||{}).value||'';
@@ -1065,6 +1072,7 @@ function saveAPEdit(id){
 
 // ─── AP ─────────────────────────────────────────────────────────────────────
 function renderAP(){
+  renderAPDash();
   const search=(($('ap-search')||{}).value||'').toLowerCase();
   const status=($('ap-status')||{}).value||'';
   const rows=db.ap.filter(b=>(!search||b.id.toLowerCase().includes(search)||b.vendor.toLowerCase().includes(search))&&(!status||b.status===status));
