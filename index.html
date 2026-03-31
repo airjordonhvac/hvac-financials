@@ -3110,17 +3110,19 @@ async function loadFromSupabase(){
   $('syncDot').className='sync-dot syncing';$('syncLabel').textContent='Loading...';
   try{
     const H={'apikey':sbConfig.key,'Authorization':'Bearer '+sbConfig.key};
-    const [arR,apR,jobsR,payR]=await Promise.all([
+    const [arR,apR,jobsR,payR,clR]=await Promise.all([
       sbConfig.syncAR    ?fetch(sbConfig.url+'/rest/v1/aj_ar?select=*&order=invoiceDate.desc',{headers:H}).then(r=>r.json()):Promise.resolve(null),
       sbConfig.syncAP    ?fetch(sbConfig.url+'/rest/v1/aj_ap?select=*&order=billDate.desc',{headers:H}).then(r=>r.json()):Promise.resolve(null),
       sbConfig.syncJobs  ?fetch(sbConfig.url+'/rest/v1/aj_jobs?select=*',{headers:H}).then(r=>r.json()):Promise.resolve(null),
       sbConfig.syncPayroll?fetch(sbConfig.url+'/rest/v1/aj_payroll?select=*',{headers:H}).then(r=>r.json()):Promise.resolve(null),
+      sbConfig.syncAP?fetch(sbConfig.url+'/rest/v1/aj_credit_lines?select=*',{headers:H}).then(r=>r.json()):Promise.resolve(null),
     ]);
     let changed=false;
     if(Array.isArray(arR)   &&arR.length>0)  {db.ar=arR;      changed=true;}
     if(Array.isArray(apR)   &&apR.length>0)  {db.ap=apR;      changed=true;}
     if(Array.isArray(jobsR) &&jobsR.length>0){db.jobs=jobsR;  changed=true;}
     if(Array.isArray(payR)  &&payR.length>0) {db.payroll=payR;changed=true;}
+    if(Array.isArray(clR)   &&clR.length>0)   {db.creditLines=clR;changed=true;}
     if(changed)localStorage.setItem('aj_financials_v3',JSON.stringify(db));
     $('syncDot').className='sync-dot connected';
     $('syncLabel').textContent='Live Sync';
