@@ -393,6 +393,31 @@ select option{background:var(--navy-mid);}
     </select>
   </div>
 
+<!-- AP -->
+<div class="page-section" id="tab-ap">
+  <div class="section-header">
+    <div class="section-title">Accounts Payable</div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="openImportInvoice('ap')">↑ Import Invoice</button>
+      <button class="btn btn-primary" onclick="openModal('ap')">+ New Bill</button>
+    </div>
+  </div>
+  <div id="ap-dash" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
+  <div class="filters">
+    <input class="filter-input" id="ap-search" placeholder="Search vendor / bill #" oninput="renderAP()">
+    <select class="filter-input" id="ap-status" onchange="renderAP()">
+      <option value="">All Status</option><option value="pending">Pending</option>
+      <option value="paid">Paid</option><option value="overdue">Overdue</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Bill #</th><th>Vendor</th><th>Category</th><th>Bill Date</th><th>Due Date</th><th class="text-right">Amount</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="ap-body"></tbody>
+    </table>
+  </div>
+</div>
+
   <!-- Credit Lines -->
   <div style="margin-top:28px;border-top:1px solid var(--border);padding-top:22px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -439,31 +464,6 @@ select option{background:var(--navy-mid);}
     <table>
       <thead><tr><th>Invoice #</th><th>Client</th><th>Project</th><th>Invoice Date</th><th>Due Date</th><th class="text-right">Billed</th><th class="text-right">Retention</th><th class="text-right">Net Due</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th>Status</th><th>Lien</th><th>Actions</th></tr></thead>
       <tbody id="ar-body"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- AP -->
-<div class="page-section" id="tab-ap">
-  <div class="section-header">
-    <div class="section-title">Accounts Payable</div>
-    <div class="btn-row">
-      <button class="btn btn-ghost" onclick="openImportInvoice('ap')">↑ Import Invoice</button>
-      <button class="btn btn-primary" onclick="openModal('ap')">+ New Bill</button>
-    </div>
-  </div>
-  <div id="ap-dash" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
-  <div class="filters">
-    <input class="filter-input" id="ap-search" placeholder="Search vendor / bill #" oninput="renderAP()">
-    <select class="filter-input" id="ap-status" onchange="renderAP()">
-      <option value="">All Status</option><option value="pending">Pending</option>
-      <option value="paid">Paid</option><option value="overdue">Overdue</option>
-    </select>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Bill #</th><th>Vendor</th><th>Category</th><th>Bill Date</th><th>Due Date</th><th class="text-right">Amount</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="ap-body"></tbody>
     </table>
   </div>
 </div>
