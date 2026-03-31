@@ -392,6 +392,13 @@ select option{background:var(--navy-mid);}
       <option value="notice">Notice Sent</option><option value="filed">Lien Filed</option>
     </select>
   </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Invoice #</th><th>Client</th><th>Project</th><th>Invoice Date</th><th>Due Date</th><th class="text-right">Billed</th><th class="text-right">Retention</th><th class="text-right">Net Due</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th>Status</th><th>Lien</th><th>Actions</th></tr></thead>
+      <tbody id="ar-body"></tbody>
+    </table>
+  </div>
+</div>
 
 <!-- AP -->
 <div class="page-section" id="tab-ap">
@@ -416,9 +423,6 @@ select option{background:var(--navy-mid);}
       <tbody id="ap-body"></tbody>
     </table>
   </div>
-
-
-  <!-- Credit Lines -->
   <div style="margin-top:28px;border-top:1px solid var(--border);padding-top:22px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:14px;font-weight:700;color:var(--text)">Credit Lines &amp; Lines of Credit</div>
@@ -432,8 +436,6 @@ select option{background:var(--navy-mid);}
     </div>
     <div id="cl-body"></div>
   </div>
-
-  <!-- Credit Line Modal -->
   <div id="cl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -458,17 +460,6 @@ select option{background:var(--navy-mid);}
       </div>
     </div>
   </div>
-
-
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Invoice #</th><th>Client</th><th>Project</th><th>Invoice Date</th><th>Due Date</th><th class="text-right">Billed</th><th class="text-right">Retention</th><th class="text-right">Net Due</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th>Status</th><th>Lien</th><th>Actions</th></tr></thead>
-      <tbody id="ar-body"></tbody>
-    </table>
-  </div>
-</div>
-
-
 </div>
 
 <!-- JOBS -->
@@ -757,18 +748,7 @@ function openCreditLineModal(id){
 function closeCreditLineModal(){document.getElementById('cl-modal').style.display='none';}
 function saveCreditLine(){
   var id=document.getElementById('cl-id').value||('CL::'+Date.now());
-  var entry={
-    id:id,
-    name:document.getElementById('cl-name').value.trim(),
-    type:document.getElementById('cl-type').value,
-    issuer:document.getElementById('cl-issuer').value.trim(),
-    limit:parseFloat(document.getElementById('cl-limit').value)||0,
-    balance:parseFloat(document.getElementById('cl-balance').value)||0,
-    min:parseFloat(document.getElementById('cl-min').value)||0,
-    due:document.getElementById('cl-due').value,
-    apr:parseFloat(document.getElementById('cl-apr').value)||0,
-    notes:document.getElementById('cl-notes').value.trim()
-  };
+  var entry={id:id,name:document.getElementById('cl-name').value.trim(),type:document.getElementById('cl-type').value,issuer:document.getElementById('cl-issuer').value.trim(),limit:parseFloat(document.getElementById('cl-limit').value)||0,balance:parseFloat(document.getElementById('cl-balance').value)||0,min:parseFloat(document.getElementById('cl-min').value)||0,due:document.getElementById('cl-due').value,apr:parseFloat(document.getElementById('cl-apr').value)||0,notes:document.getElementById('cl-notes').value.trim()};
   if(!entry.name){toast('Name is required','error');return;}
   if(!db.creditLines)db.creditLines=[];
   var idx=db.creditLines.findIndex(function(c){return c.id===id;});
@@ -781,55 +761,40 @@ function deleteCreditLine(id){
   save(db);renderCreditLines();toast('Deleted','success');
 }
 function renderCreditLines(){
-  var wrap=document.getElementById('cl-body');
-  if(!wrap)return;
+  var wrap=document.getElementById('cl-body');if(!wrap)return;
   if(!db.creditLines)db.creditLines=[];
   var lines=db.creditLines;
   function setV(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
   wrap.innerHTML='';
   if(!lines.length){
-    var msg=document.createElement('div');
-    msg.style.color='var(--muted)';msg.style.fontSize='13px';
-    msg.style.padding='18px 0';msg.style.textAlign='center';
-    msg.textContent='No credit lines yet. Click + Add Credit Line to get started.';
-    wrap.appendChild(msg);
-    ['cl-tlimit','cl-tbal','cl-tavail','cl-tutil'].forEach(function(id){setV(id,'--');});
-    return;
+    var msg=document.createElement('div');msg.style.color='var(--muted)';msg.style.fontSize='13px';msg.style.padding='18px 0';msg.style.textAlign='center';msg.textContent='No credit lines yet. Click + Add Credit Line to get started.';wrap.appendChild(msg);
+    ['cl-tlimit','cl-tbal','cl-tavail','cl-tutil'].forEach(function(id){setV(id,'--');});return;
   }
   var tl=lines.reduce(function(s,c){return s+(c.limit||0);},0);
   var tb=lines.reduce(function(s,c){return s+(c.balance||0);},0);
   var tu=tl?Math.round(tb/tl*100):0;
   setV('cl-tlimit',fmt$(tl));setV('cl-tbal',fmt$(tb));setV('cl-tavail',fmt$(tl-tb));setV('cl-tutil',tu+'%');
-  var uEl=document.getElementById('cl-tutil');
-  if(uEl)uEl.style.color=tu>=90?'var(--danger)':tu>=70?'var(--warning)':'var(--green)';
+  var uEl=document.getElementById('cl-tutil');if(uEl)uEl.style.color=tu>=90?'var(--danger)':tu>=70?'var(--warning)':'var(--green)';
   var soon=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
   lines.forEach(function(c){
-    var av=(c.limit||0)-(c.balance||0);
-    var ut=c.limit?Math.round((c.balance||0)/c.limit*100):0;
-    var uc=ut>=90?'var(--danger)':ut>=70?'var(--warning)':'var(--green)';
-    var ds=c.due&&c.due<=soon;
+    var av=(c.limit||0)-(c.balance||0),ut=c.limit?Math.round((c.balance||0)/c.limit*100):0,uc=ut>=90?'var(--danger)':ut>=70?'var(--warning)':'var(--green)',ds=c.due&&c.due<=soon;
     var row=document.createElement('div');row.className='cl-row';
     (function(cid){row.onclick=function(){openCreditLineModal(cid);};}(c.id));
     var left=document.createElement('div');left.className='cl-left';
-    var ico=document.createElement('i');ico.className='cl-ico';
-    ico.textContent=c.type==='loc'?'[LOC]':c.type==='card'?'[CC]':'[--]';
+    var ico=document.createElement('i');ico.className='cl-ico';ico.textContent=c.type==='loc'?'[LOC]':c.type==='card'?'[CC]':'[--]';
     var info=document.createElement('div');
     var nm=document.createElement('div');nm.className='cl-name';nm.textContent=c.name;
-    var sub=document.createElement('div');sub.className='cl-sub';
-    sub.textContent=(c.issuer||'')+(c.apr?(' · '+c.apr+'% APR'):'')+(c.type==='loc'?' · LOC':c.type==='card'?' · Card':'');
+    var sub=document.createElement('div');sub.className='cl-sub';sub.textContent=(c.issuer||'')+(c.apr?(' · '+c.apr+'% APR'):'')+(c.type==='loc'?' · LOC':c.type==='card'?' · Card':'');
     info.appendChild(nm);info.appendChild(sub);left.appendChild(ico);left.appendChild(info);
     var mid=document.createElement('div');mid.className='cl-mid';
     var track=document.createElement('div');track.className='cl-bar-track';
-    var fill=document.createElement('div');fill.className='cl-bar-fill';
-    fill.style.width=Math.min(ut,100)+'%';fill.style.background=uc;track.appendChild(fill);
+    var fill=document.createElement('div');fill.className='cl-bar-fill';fill.style.width=Math.min(ut,100)+'%';fill.style.background=uc;track.appendChild(fill);
     var lbls=document.createElement('div');lbls.className='cl-bar-lbls';
     var ll=document.createElement('span');ll.style.color='var(--muted)';ll.textContent=fmt$(c.balance||0)+' / '+fmt$(c.limit||0);
     var lr=document.createElement('span');lr.style.fontWeight='700';lr.style.color=uc;lr.textContent=ut+'%';
     lbls.appendChild(ll);lbls.appendChild(lr);mid.appendChild(track);mid.appendChild(lbls);
     var right=document.createElement('div');right.className='cl-right';
-    var avd=document.createElement('div');avd.textContent='Avail: ';
-    var avs=document.createElement('strong');avs.style.color='var(--green)';avs.textContent=fmt$(av);
-    avd.appendChild(avs);right.appendChild(avd);
+    var avd=document.createElement('div');avd.textContent='Avail: ';var avs=document.createElement('strong');avs.style.color='var(--green)';avs.textContent=fmt$(av);avd.appendChild(avs);right.appendChild(avd);
     if(c.min){var md=document.createElement('div');md.textContent='Min pmt: '+fmt$(c.min);right.appendChild(md);}
     if(c.due){var dd=document.createElement('div');dd.style.color=ds?'var(--warning)':'var(--muted)';dd.textContent='Due: '+c.due+(ds?' (!!)':'');right.appendChild(dd);}
     var del=document.createElement('button');del.className='cl-del';del.title='Delete';del.textContent='[x]';
@@ -3125,7 +3090,7 @@ async function loadFromSupabase(){
     if(Array.isArray(apR)   &&apR.length>0)  {db.ap=apR;      changed=true;}
     if(Array.isArray(jobsR) &&jobsR.length>0){db.jobs=jobsR;  changed=true;}
     if(Array.isArray(payR)  &&payR.length>0) {db.payroll=payR;changed=true;}
-    if(Array.isArray(clR)   &&clR.length>0)   {db.creditLines=clR;changed=true;}
+    if(Array.isArray(clR)&&clR.length>0){db.creditLines=clR;changed=true;}
     if(changed)localStorage.setItem('aj_financials_v3',JSON.stringify(db));
     $('syncDot').className='sync-dot connected';
     $('syncLabel').textContent='Live Sync';
