@@ -1,43 +1,3 @@
-
-  <div style="margin-top:28px;border-top:1px solid var(--border);padding-top:22px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:700;color:var(--text)">Credit Lines &amp; Lines of Credit</div>
-      <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openCreditLineModal()">+ Add Credit Line</button>
-    </div>
-    <div class="cl-grid">
-      <div class="cl-card"><div class="lbl">Total Limit</div><div class="val" id="cl-tlimit">--</div></div>
-      <div class="cl-card"><div class="lbl">Total Balance</div><div class="val" id="cl-tbal">--</div></div>
-      <div class="cl-card"><div class="lbl">Available</div><div class="val" id="cl-tavail">--</div></div>
-      <div class="cl-card"><div class="lbl">Utilization</div><div class="val" id="cl-tutil">--</div></div>
-    </div>
-    <div id="cl-body"></div>
-  </div>
-  <div id="cl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <div style="font-size:16px;font-weight:700;color:var(--text)">Credit Line</div>
-        <button onclick="closeCreditLineModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">&times;</button>
-      </div>
-      <input type="hidden" id="cl-id">
-      <div class="cl-modal-grid">
-        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Name / Nickname *</label><input id="cl-name" class="form-control" placeholder="e.g. Chase Ink Business, BOA LOC"></div>
-        <div class="form-group"><label class="form-label">Type</label>
-          <select id="cl-type" class="form-control"><option value="card">Credit Card</option><option value="loc">Line of Credit</option><option value="other">Other</option></select>
-        </div>
-        <div class="form-group"><label class="form-label">Issuer / Bank</label><input id="cl-issuer" class="form-control" placeholder="Chase, Bank of America..."></div>
-        <div class="form-group"><label class="form-label">Credit Limit ($)</label><input id="cl-limit" class="form-control" type="number" placeholder="25000"></div>
-        <div class="form-group"><label class="form-label">Current Balance ($)</label><input id="cl-balance" class="form-control" type="number" placeholder="8500"></div>
-        <div class="form-group"><label class="form-label">Minimum Payment ($)</label><input id="cl-min" class="form-control" type="number" placeholder="250"></div>
-        <div class="form-group"><label class="form-label">Payment Due Date</label><input id="cl-due" class="form-control" type="date"></div>
-        <div class="form-group"><label class="form-label">APR (%)</label><input id="cl-apr" class="form-control" type="number" step="0.01" placeholder="22.99"></div>
-        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Notes</label><input id="cl-notes" class="form-control" placeholder="e.g. Materials purchases only"></div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-        <button class="btn btn-ghost" onclick="closeCreditLineModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveCreditLine()">Save</button>
-      </div>
-    </div>
-  </div>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -45,87 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Air Jordon HVAC — Financial Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-function openCreditLineModal(id){
-  const cl=id?db.creditLines.find(c=>c.id===id):null;
-  document.getElementById('cl-modal').style.display='flex';
-  document.getElementById('cl-id').value=cl?cl.id:'';
-  document.getElementById('cl-name').value=cl?cl.name:'';
-  document.getElementById('cl-type').value=cl?cl.type:'card';
-  document.getElementById('cl-issuer').value=cl?cl.issuer:'';
-  document.getElementById('cl-limit').value=cl?cl.limit:'';
-  document.getElementById('cl-balance').value=cl?cl.balance:'';
-  document.getElementById('cl-min').value=cl?cl.min:'';
-  document.getElementById('cl-due').value=cl?cl.due:'';
-  document.getElementById('cl-apr').value=cl?cl.apr:'';
-  document.getElementById('cl-notes').value=cl?cl.notes:'';
-}
-function closeCreditLineModal(){document.getElementById('cl-modal').style.display='none';}
-function saveCreditLine(){
-  const id=document.getElementById('cl-id').value||'CL::'+Date.now();
-  const entry={
-    id,
-    name:document.getElementById('cl-name').value.trim(),
-    type:document.getElementById('cl-type').value,
-    issuer:document.getElementById('cl-issuer').value.trim(),
-    limit:parseFloat(document.getElementById('cl-limit').value)||0,
-    balance:parseFloat(document.getElementById('cl-balance').value)||0,
-    min:parseFloat(document.getElementById('cl-min').value)||0,
-    due:document.getElementById('cl-due').value,
-    apr:parseFloat(document.getElementById('cl-apr').value)||0,
-    notes:document.getElementById('cl-notes').value.trim()
-  };
-  if(!entry.name){toast('Name is required','error');return;}
-  const idx=db.creditLines.findIndex(c=>c.id===id);
-  if(idx>=0)db.creditLines[idx]=entry;else db.creditLines.push(entry);
-  save(db);closeCreditLineModal();renderCreditLines();toast('Saved','success');
-}
-function deleteCreditLine(id){
-  if(!confirm('Delete this credit line?'))return;
-  db.creditLines=db.creditLines.filter(c=>c.id!==id);
-  save(db);renderCreditLines();toast('Deleted','success');
-}
-function renderCreditLines(){
-  const wrap=document.getElementById('cl-body');if(!wrap)return;
-  const lines=db.creditLines||[];
-  const setV=(id,v)=>{const el=document.getElementById(id);if(el){el.textContent=v;}};
-  if(!lines.length){
-    wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:18px 0;text-align:center;">No credit lines yet. Click + Add Credit Line to get started.</div>';
-    ['cl-tlimit','cl-tbal','cl-tavail','cl-tutil'].forEach(id=>setV(id,'--'));return;
-  }
-  const tl=lines.reduce((s,c)=>s+c.limit,0);
-  const tb=lines.reduce((s,c)=>s+c.balance,0);
-  const ta=tl-tb;
-  const tu=tl?Math.round(tb/tl*100):0;
-  setV('cl-tlimit',fmt$(tl));setV('cl-tbal',fmt$(tb));setV('cl-tavail',fmt$(ta));setV('cl-tutil',tu+'%');
-  const uEl=document.getElementById('cl-tutil');
-  if(uEl)uEl.style.color=tu>=90?'var(--danger)':tu>=70?'var(--warning)':'var(--green)';
-  const soon=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
-  wrap.innerHTML=lines.map(c=>{
-    const av=c.limit-c.balance;
-    const ut=c.limit?Math.round(c.balance/c.limit*100):0;
-    const uc=ut>=90?'var(--danger)':ut>=70?'var(--warning)':'var(--green)';
-    const ico=c.type==='loc'?'[LOC]':c.type==='card'?'[CC]':'[--]';
-    const ds=c.due&&c.due<=soon;
-    return '<div class="cl-row" onclick="openCreditLineModal(\'' +c.id+ '\')">'+
-      '<div class="cl-left"><span class="cl-ico">'+ico+'</span>'+
-      '<div><div class="cl-name">'+c.name+'</div>'+
-      '<div class="cl-sub">'+(c.issuer||'')+(c.apr?' &middot; '+c.apr+'% APR':'')+'</div></div></div>'+
-      '<div class="cl-mid">'+
-      '<div class="cl-bar-track"><div class="cl-bar-fill" style="width:'+Math.min(ut,100)+'%;background:'+uc+'"></div></div>'+
-      '<div class="cl-bar-lbls"><span style="color:var(--muted)">'+fmt$(c.balance)+' / '+fmt$(c.limit)+'</span>'+
-      '<span style="color:'+uc+';font-weight:700">'+ut+'%</span></div></div>'+
-      '<div class="cl-right">'+
-      '<div>Avail: <strong style="color:var(--green)">'+fmt$(av)+'</strong></div>'+
-      (c.min?'<div>Min: '+fmt$(c.min)+'</div>':'')+
-      (c.due?'<div style="color:'+(ds?'var(--warning)':'var(--muted)')+'">Due: '+c.due+(ds?' (!)':'')+'</div>':'')+
-      '</div>'+
-      '<button class="cl-del" onclick="event.stopPropagation();deleteCreditLine(\'' +c.id+ '\')" title="Delete">[x]</button>'+
-      '</div>';
-  }).join('');
-}
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 :root {
@@ -403,7 +283,7 @@ select option{background:var(--navy-mid);}
 .oh-category-sub{font-size:11px;color:var(--text-muted);}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* Credit Lines */
+/* --- Credit Lines --- */
 .cl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 .cl-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
 .cl-card .lbl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
@@ -411,7 +291,7 @@ select option{background:var(--navy-mid);}
 .cl-row{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
 .cl-row:hover{border-color:var(--accent)}
 .cl-left{display:flex;align-items:center;gap:12px;min-width:190px}
-.cl-ico{font-size:22px}
+.cl-ico{font-size:20px;font-style:normal}
 .cl-name{font-size:14px;font-weight:600;color:var(--text)}
 .cl-sub{font-size:11px;color:var(--muted);margin-top:2px}
 .cl-mid{flex:1;min-width:150px}
@@ -421,8 +301,9 @@ select option{background:var(--navy-mid);}
 .cl-right{min-width:130px;text-align:right;font-size:12px;color:var(--muted);line-height:1.8}
 .cl-del{background:none;border:none;cursor:pointer;opacity:.35;font-size:15px;padding:4px 6px;transition:opacity .15s;flex-shrink:0}
 .cl-del:hover{opacity:1}
-.cl-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:640px){.cl-grid{grid-template-columns:1fr 1fr}.cl-row{flex-wrap:wrap}.cl-left{min-width:unset}.cl-modal-grid{grid-template-columns:1fr}}
+.cl-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.cl-grid{grid-template-columns:1fr 1fr}.cl-row{flex-wrap:wrap}.cl-left{min-width:unset}.cl-mgrid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -511,6 +392,49 @@ select option{background:var(--navy-mid);}
       <option value="notice">Notice Sent</option><option value="filed">Lien Filed</option>
     </select>
   </div>
+
+  <!-- Credit Lines -->
+  <div style="margin-top:28px;border-top:1px solid var(--border);padding-top:22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;color:var(--text)">Credit Lines &amp; Lines of Credit</div>
+      <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openCreditLineModal()">+ Add Credit Line</button>
+    </div>
+    <div class="cl-grid">
+      <div class="cl-card"><div class="lbl">Total Limit</div><div class="val" id="cl-tlimit">--</div></div>
+      <div class="cl-card"><div class="lbl">Total Balance</div><div class="val" id="cl-tbal">--</div></div>
+      <div class="cl-card"><div class="lbl">Available</div><div class="val" id="cl-tavail">--</div></div>
+      <div class="cl-card"><div class="lbl">Utilization</div><div class="val" id="cl-tutil">--</div></div>
+    </div>
+    <div id="cl-body"></div>
+  </div>
+
+  <!-- Credit Line Modal -->
+  <div id="cl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Credit Line</div>
+        <button onclick="closeCreditLineModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">&times;</button>
+      </div>
+      <input type="hidden" id="cl-id">
+      <div class="cl-mgrid">
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Name *</label><input id="cl-name" class="form-control" placeholder="e.g. Chase Ink, BOA LOC"></div>
+        <div class="form-group"><label class="form-label">Type</label><select id="cl-type" class="form-control"><option value="card">Credit Card</option><option value="loc">Line of Credit</option><option value="other">Other</option></select></div>
+        <div class="form-group"><label class="form-label">Issuer / Bank</label><input id="cl-issuer" class="form-control" placeholder="Chase, Bank of America..."></div>
+        <div class="form-group"><label class="form-label">Credit Limit ($)</label><input id="cl-limit" class="form-control" type="number" placeholder="25000"></div>
+        <div class="form-group"><label class="form-label">Current Balance ($)</label><input id="cl-balance" class="form-control" type="number" placeholder="8500"></div>
+        <div class="form-group"><label class="form-label">Minimum Payment ($)</label><input id="cl-min" class="form-control" type="number" placeholder="250"></div>
+        <div class="form-group"><label class="form-label">Payment Due Date</label><input id="cl-due" class="form-control" type="date"></div>
+        <div class="form-group"><label class="form-label">APR (%)</label><input id="cl-apr" class="form-control" type="number" step="0.01" placeholder="22.99"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Notes</label><input id="cl-notes" class="form-control" placeholder="e.g. Materials purchases only"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeCreditLineModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCreditLine()">Save</button>
+      </div>
+    </div>
+  </div>
+
+
   <div class="table-wrap">
     <table>
       <thead><tr><th>Invoice #</th><th>Client</th><th>Project</th><th>Invoice Date</th><th>Due Date</th><th class="text-right">Billed</th><th class="text-right">Retention</th><th class="text-right">Net Due</th><th class="text-right">Paid</th><th class="text-right">Balance</th><th>Status</th><th>Lien</th><th>Actions</th></tr></thead>
@@ -811,6 +735,106 @@ select option{background:var(--navy-mid);}
 const KEY = 'aj_financials_v3';
 const SB_KEY = 'aj_supabase_config';
 
+
+// ---- Credit Lines ----
+function openCreditLineModal(id){
+  var cl=id?(db.creditLines||[]).find(function(c){return c.id===id;}):null;
+  document.getElementById('cl-modal').style.display='flex';
+  document.getElementById('cl-id').value=cl?cl.id:'';
+  document.getElementById('cl-name').value=cl?cl.name:'';
+  document.getElementById('cl-type').value=cl?cl.type:'card';
+  document.getElementById('cl-issuer').value=cl?cl.issuer:'';
+  document.getElementById('cl-limit').value=cl?cl.limit:'';
+  document.getElementById('cl-balance').value=cl?cl.balance:'';
+  document.getElementById('cl-min').value=cl?cl.min:'';
+  document.getElementById('cl-due').value=cl?cl.due:'';
+  document.getElementById('cl-apr').value=cl?cl.apr:'';
+  document.getElementById('cl-notes').value=cl?cl.notes:'';
+}
+function closeCreditLineModal(){document.getElementById('cl-modal').style.display='none';}
+function saveCreditLine(){
+  var id=document.getElementById('cl-id').value||('CL::'+Date.now());
+  var entry={
+    id:id,
+    name:document.getElementById('cl-name').value.trim(),
+    type:document.getElementById('cl-type').value,
+    issuer:document.getElementById('cl-issuer').value.trim(),
+    limit:parseFloat(document.getElementById('cl-limit').value)||0,
+    balance:parseFloat(document.getElementById('cl-balance').value)||0,
+    min:parseFloat(document.getElementById('cl-min').value)||0,
+    due:document.getElementById('cl-due').value,
+    apr:parseFloat(document.getElementById('cl-apr').value)||0,
+    notes:document.getElementById('cl-notes').value.trim()
+  };
+  if(!entry.name){toast('Name is required','error');return;}
+  if(!db.creditLines)db.creditLines=[];
+  var idx=db.creditLines.findIndex(function(c){return c.id===id;});
+  if(idx>=0){db.creditLines[idx]=entry;}else{db.creditLines.push(entry);}
+  save(db);closeCreditLineModal();renderCreditLines();toast('Saved','success');
+}
+function deleteCreditLine(id){
+  if(!confirm('Delete this credit line?'))return;
+  db.creditLines=(db.creditLines||[]).filter(function(c){return c.id!==id;});
+  save(db);renderCreditLines();toast('Deleted','success');
+}
+function renderCreditLines(){
+  var wrap=document.getElementById('cl-body');
+  if(!wrap)return;
+  if(!db.creditLines)db.creditLines=[];
+  var lines=db.creditLines;
+  function setV(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
+  wrap.innerHTML='';
+  if(!lines.length){
+    var msg=document.createElement('div');
+    msg.style.color='var(--muted)';msg.style.fontSize='13px';
+    msg.style.padding='18px 0';msg.style.textAlign='center';
+    msg.textContent='No credit lines yet. Click + Add Credit Line to get started.';
+    wrap.appendChild(msg);
+    ['cl-tlimit','cl-tbal','cl-tavail','cl-tutil'].forEach(function(id){setV(id,'--');});
+    return;
+  }
+  var tl=lines.reduce(function(s,c){return s+(c.limit||0);},0);
+  var tb=lines.reduce(function(s,c){return s+(c.balance||0);},0);
+  var tu=tl?Math.round(tb/tl*100):0;
+  setV('cl-tlimit',fmt$(tl));setV('cl-tbal',fmt$(tb));setV('cl-tavail',fmt$(tl-tb));setV('cl-tutil',tu+'%');
+  var uEl=document.getElementById('cl-tutil');
+  if(uEl)uEl.style.color=tu>=90?'var(--danger)':tu>=70?'var(--warning)':'var(--green)';
+  var soon=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
+  lines.forEach(function(c){
+    var av=(c.limit||0)-(c.balance||0);
+    var ut=c.limit?Math.round((c.balance||0)/c.limit*100):0;
+    var uc=ut>=90?'var(--danger)':ut>=70?'var(--warning)':'var(--green)';
+    var ds=c.due&&c.due<=soon;
+    var row=document.createElement('div');row.className='cl-row';
+    (function(cid){row.onclick=function(){openCreditLineModal(cid);};}(c.id));
+    var left=document.createElement('div');left.className='cl-left';
+    var ico=document.createElement('i');ico.className='cl-ico';
+    ico.textContent=c.type==='loc'?'[LOC]':c.type==='card'?'[CC]':'[--]';
+    var info=document.createElement('div');
+    var nm=document.createElement('div');nm.className='cl-name';nm.textContent=c.name;
+    var sub=document.createElement('div');sub.className='cl-sub';
+    sub.textContent=(c.issuer||'')+(c.apr?(' · '+c.apr+'% APR'):'')+(c.type==='loc'?' · LOC':c.type==='card'?' · Card':'');
+    info.appendChild(nm);info.appendChild(sub);left.appendChild(ico);left.appendChild(info);
+    var mid=document.createElement('div');mid.className='cl-mid';
+    var track=document.createElement('div');track.className='cl-bar-track';
+    var fill=document.createElement('div');fill.className='cl-bar-fill';
+    fill.style.width=Math.min(ut,100)+'%';fill.style.background=uc;track.appendChild(fill);
+    var lbls=document.createElement('div');lbls.className='cl-bar-lbls';
+    var ll=document.createElement('span');ll.style.color='var(--muted)';ll.textContent=fmt$(c.balance||0)+' / '+fmt$(c.limit||0);
+    var lr=document.createElement('span');lr.style.fontWeight='700';lr.style.color=uc;lr.textContent=ut+'%';
+    lbls.appendChild(ll);lbls.appendChild(lr);mid.appendChild(track);mid.appendChild(lbls);
+    var right=document.createElement('div');right.className='cl-right';
+    var avd=document.createElement('div');avd.textContent='Avail: ';
+    var avs=document.createElement('strong');avs.style.color='var(--green)';avs.textContent=fmt$(av);
+    avd.appendChild(avs);right.appendChild(avd);
+    if(c.min){var md=document.createElement('div');md.textContent='Min pmt: '+fmt$(c.min);right.appendChild(md);}
+    if(c.due){var dd=document.createElement('div');dd.style.color=ds?'var(--warning)':'var(--muted)';dd.textContent='Due: '+c.due+(ds?' (!!)':'');right.appendChild(dd);}
+    var del=document.createElement('button');del.className='cl-del';del.title='Delete';del.textContent='[x]';
+    (function(cid){del.onclick=function(e){e.stopPropagation();deleteCreditLine(cid);};}(c.id));
+    row.appendChild(left);row.appendChild(mid);row.appendChild(right);row.appendChild(del);wrap.appendChild(row);
+  });
+}
+
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||defaultData();}catch{return defaultData();}}
 function save(d){localStorage.setItem(KEY,JSON.stringify(d));clearTimeout(window.__syncTimer);window.__syncTimer=setTimeout(()=>{if(sbConfig&&sbConfig.url&&sbConfig.key)syncToSupabase(true);},1500);}
 function loadSBConfig(){const D={url:'https://zottjoyiczglrkaodjfr.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvdHRqb3lpY3pnbHJrYW9kamZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNDk3NTAsImV4cCI6MjA4OTgyNTc1MH0.5LycZbEK23JVyHPvSG3JHqLwumoFLDCkZzLQ4ERLqTE',syncAR:true,syncAP:true,syncJobs:true,syncPayroll:true};try{const s=JSON.parse(localStorage.getItem(SB_KEY));return s&&s.url?s:D;}catch{return D;}}
@@ -846,7 +870,7 @@ function defaultData(){
 }
 
 let db=load();
-if(!db.creditLines) db.creditLines=[];
+if(!db.creditLines)db.creditLines=[];
 let sbConfig=loadSBConfig();
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
@@ -917,7 +941,7 @@ async function syncToSupabase(silent){
     const tasks=[];
     if(sbConfig.syncAR) tasks.push(sbUpsert('aj_ar',db.ar));
     if(sbConfig.syncAP) tasks.push(sbUpsert('aj_ap',db.ap));
-    if(sbConfig.syncAP && db.creditLines&&db.creditLines.length) tasks.push(sbUpsert('aj_credit_lines',db.creditLines));
+    if(sbConfig.syncAP&&db.creditLines&&db.creditLines.length)tasks.push(sbUpsert('aj_credit_lines',db.creditLines));
     if(sbConfig.syncJobs) tasks.push(sbUpsert('aj_jobs',db.jobs));
     if(sbConfig.syncPayroll) tasks.push(sbUpsert('aj_payroll',db.payroll));
     await Promise.all(tasks);
@@ -981,7 +1005,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     document.querySelectorAll('.page-section').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
     $('tab-'+t.dataset.tab).classList.add('active');
-    const renders={dashboard:renderDashboard,ar:renderAR,ap:()=>{renderAP();renderCreditLines();},jobs:renderJobs,aging:renderAging,payroll:renderPayroll,overhead:renderOverhead};
+    const renders={dashboard:renderDashboard,ar:renderAR,ap:function(){renderAP();renderCreditLines();},jobs:renderJobs,aging:renderAging,payroll:renderPayroll,overhead:renderOverhead};
     if(renders[t.dataset.tab])renders[t.dataset.tab]();  });
 });
 $('todayDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
@@ -1215,85 +1239,6 @@ function saveAPEdit(id){
 }
 
 // ─── AP ─────────────────────────────────────────────────────────────────────
-// ── CREDIT LINES ──────────────────────────────────────────────────────────────
-function openCreditLineModal(id){
-  const cl=id?db.creditLines.find(c=>c.id===id):null;
-  document.getElementById('cl-modal').style.display='flex';
-  document.getElementById('cl-id').value=cl?cl.id:'';
-  document.getElementById('cl-name').value=cl?cl.name:'';
-  document.getElementById('cl-type').value=cl?cl.type:'card';
-  document.getElementById('cl-issuer').value=cl?cl.issuer:'';
-  document.getElementById('cl-limit').value=cl?cl.limit:'';
-  document.getElementById('cl-balance').value=cl?cl.balance:'';
-  document.getElementById('cl-min').value=cl?cl.min:'';
-  document.getElementById('cl-due').value=cl?cl.due:'';
-  document.getElementById('cl-apr').value=cl?cl.apr:'';
-  document.getElementById('cl-notes').value=cl?cl.notes:'';
-}
-function closeCreditLineModal(){document.getElementById('cl-modal').style.display='none';}
-function saveCreditLine(){
-  const id=document.getElementById('cl-id').value||'CL::'+Date.now();
-  const entry={
-    id,
-    name:document.getElementById('cl-name').value.trim(),
-    type:document.getElementById('cl-type').value,
-    issuer:document.getElementById('cl-issuer').value.trim(),
-    limit:parseFloat(document.getElementById('cl-limit').value)||0,
-    balance:parseFloat(document.getElementById('cl-balance').value)||0,
-    min:parseFloat(document.getElementById('cl-min').value)||0,
-    due:document.getElementById('cl-due').value,
-    apr:parseFloat(document.getElementById('cl-apr').value)||0,
-    notes:document.getElementById('cl-notes').value.trim()
-  };
-  if(!entry.name){toast('Name is required','error');return;}
-  const idx=db.creditLines.findIndex(c=>c.id===id);
-  if(idx>=0)db.creditLines[idx]=entry;else db.creditLines.push(entry);
-  save(db);closeCreditLineModal();renderCreditLines();toast('Saved','success');
-}
-function deleteCreditLine(id){
-  if(!confirm('Delete this credit line?'))return;
-  db.creditLines=db.creditLines.filter(c=>c.id!==id);
-  save(db);renderCreditLines();toast('Deleted','success');
-}
-function renderCreditLines(){
-  const wrap=document.getElementById('cl-body');if(!wrap)return;
-  const lines=db.creditLines||[];
-  const setV=(id,v)=>{const el=document.getElementById(id);if(el){el.textContent=v;}};
-  if(!lines.length){
-    wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:18px 0;text-align:center;">No credit lines yet. Click + Add Credit Line to get started.</div>';
-    ['cl-tlimit','cl-tbal','cl-tavail','cl-tutil'].forEach(id=>setV(id,'--'));return;
-  }
-  const tl=lines.reduce((s,c)=>s+c.limit,0);
-  const tb=lines.reduce((s,c)=>s+c.balance,0);
-  const ta=tl-tb;
-  const tu=tl?Math.round(tb/tl*100):0;
-  setV('cl-tlimit',fmt$(tl));setV('cl-tbal',fmt$(tb));setV('cl-tavail',fmt$(ta));setV('cl-tutil',tu+'%');
-  const uEl=document.getElementById('cl-tutil');
-  if(uEl)uEl.style.color=tu>=90?'var(--danger)':tu>=70?'var(--warning)':'var(--green)';
-  const soon=new Date(Date.now()+7*86400000).toISOString().split('T')[0];
-  wrap.innerHTML=lines.map(c=>{
-    const av=c.limit-c.balance;
-    const ut=c.limit?Math.round(c.balance/c.limit*100):0;
-    const uc=ut>=90?'var(--danger)':ut>=70?'var(--warning)':'var(--green)';
-    const ico=c.type==='loc'?'[LOC]':c.type==='card'?'[CC]':'[--]';
-    const ds=c.due&&c.due<=soon;
-    return '<div class="cl-row" onclick="openCreditLineModal(''+c.id+'')">'+
-      '<div class="cl-left"><span class="cl-ico">'+ico+'</span>'+
-      '<div><div class="cl-name">'+c.name+'</div>'+
-      '<div class="cl-sub">'+(c.issuer||'')+(c.apr?' &middot; '+c.apr+'% APR':'')+'</div></div></div>'+
-      '<div class="cl-mid">'+
-      '<div class="cl-bar-track"><div class="cl-bar-fill" style="width:'+Math.min(ut,100)+'%;background:'+uc+'"></div></div>'+
-      '<div class="cl-bar-lbls"><span style="color:var(--muted)">'+fmt$(c.balance)+' / '+fmt$(c.limit)+'</span>'+
-      '<span style="color:'+uc+';font-weight:700">'+ut+'%</span></div></div>'+
-      '<div class="cl-right">'+
-      '<div>Avail: <strong style="color:var(--green)">'+fmt$(av)+'</strong></div>'+
-      (c.min?'<div>Min pmt: '+fmt$(c.min)+'</div>':'')+
-      (c.due?'<div style="color:'+(ds?'var(--warning)':'var(--muted)')+'">Due: '+c.due+(ds?' (!!)':'')+'</div>':'')+
-      '</div>'+
-      '<button class="cl-del" onclick="event.stopPropagation();deleteCreditLine(''+c.id+'')" title="Delete">[x]</button>'+
-      '</div>';
-  }).join('');
-}
 function renderAP(){
   renderAPDash();
   const search=(($('ap-search')||{}).value||'').toLowerCase();
