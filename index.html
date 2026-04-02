@@ -902,7 +902,7 @@ async function sbUpsert(table,rows,urlOverride,keyOverride){
   return fetch(url,{method:'POST',headers:{'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
 }
 
-async // ── Settings upsert (overhead / deposits / prior) ──
+// ── Settings upsert (overhead / deposits / prior) ──
 async function sbUpsertSettings(rows){
   const H={'apikey':sbConfig.key,'Authorization':'Bearer '+sbConfig.key,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'};
   await fetch(sbConfig.url+'/rest/v1/aj_settings',{
