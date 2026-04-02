@@ -478,7 +478,7 @@ select option{background:var(--navy-mid);}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
         <div class="chart-title" style="margin:0;color:var(--gold);">Prior Period Opening Balances</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">Enter historical totals before you started using this app — added to current period for accurate YTD numbers</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">Enter prior period totals — added to current YTD. Use the last two fields for 2025 jobs whose revenue or costs flow into 2026.</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="font-size:11px;color:var(--text-muted);">As of date:</div>
@@ -835,6 +835,8 @@ function defaultData(){
       costSubs:0,
       costOverhead:0,
       payrollPaid:0,
+      priorRevenue:0,
+      priorJobCosts:0,
       asOfDate:''
     }
   };
@@ -1455,6 +1457,8 @@ const PRIOR_FIELDS = [
   { key:'costSubs',         label:'Subcontractor Costs', color:'#9a7ae8',      placeholder:'Total subs paid' },
   { key:'costOverhead',     label:'Fixed Overhead Paid', color:'var(--text-muted)', placeholder:'Insurance, leases, etc.' },
   { key:'payrollPaid',      label:'Payroll Paid',        color:'var(--gold)',  placeholder:'Total payroll disbursed' },
+  { key:'priorRevenue',     label:'Recognized Revenue (2025 jobs)', color:'var(--green)', placeholder:'Revenue from prior year jobs paid in 2026' },
+  { key:'priorJobCosts',    label:'Job Costs (2025 jobs)',          color:'var(--red)',   placeholder:'Costs from prior year jobs' },
 ];
 
 function renderPriorGrid() {
@@ -1579,11 +1583,19 @@ function renderPLSummary() {
 
   // ── P&L — all YTD actuals, same time window ──
   // Gross profit = deposits minus estimated job costs (what was earned vs spent on jobs)
-  const grossProfit = totalDeposits - totalJobCosts;
-  const grossMargin = totalDeposits > 0 ? ((grossProfit / totalDeposits) * 100).toFixed(1) : 0;
+  // Recognized revenue = sum of (contract × POC%) for each job + prior year manual entry
+  const currentRecognizedRev = db.jobs.reduce((s,j)=>{
+    const poc=pocPct(j); return s+Math.round((parseFloat(j.contract)||0)*poc);
+  },0);
+  const priorRevEntry = db.prior.priorRevenue||0;
+  const priorJobCostsEntry = db.prior.priorJobCosts||0;
+  const totalRecognizedRev = currentRecognizedRev + priorRevEntry;
+  const totalJobCostsAdj   = totalJobCosts + priorJobCostsEntry;
+  const grossProfit = totalRecognizedRev - totalJobCostsAdj;
+  const grossMargin = totalRecognizedRev > 0 ? ((grossProfit / totalRecognizedRev) * 100).toFixed(1) : 0;
   // Net profit = gross minus actual YTD fixed overhead and payroll
   const netProfit = grossProfit - totalFixedOverhead - totalPayroll;
-  const netMargin = totalDeposits > 0 ? ((netProfit / totalDeposits) * 100).toFixed(1) : 0;
+  const netMargin = totalRecognizedRev > 0 ? ((netProfit / totalRecognizedRev) * 100).toFixed(1) : 0;
   const currentYear = new Date().getFullYear();
 
   $('pl-summary').innerHTML = `
@@ -1591,9 +1603,9 @@ function renderPLSummary() {
       <div class="pl-summary-title">P&L Summary — ${currentYear}</div>
       <div class="pl-grid">
         <div class="pl-card">
-          <div class="pl-card-label">Total Bank Deposits</div>
-          <div class="pl-card-val val-green">${fmt$(totalDeposits)}</div>
-          <div class="pl-card-sub">${hasPrior ? fmt$(currentDeposits)+' current + '+fmt$(priorPayments)+' prior' : 'YTD cash in'}</div>
+          <div class="pl-card-label">Recognized Revenue</div>
+          <div class="pl-card-val val-green">${fmt$(totalRecognizedRev)}</div>
+          <div class="pl-card-sub">${priorRevEntry>0?'Incl. $'+priorRevEntry.toLocaleString()+' prior':'POC-weighted earned YTD'}</div>
         </div>
         <div class="pl-card">
           <div class="pl-card-label">Total Contract Value</div>
@@ -1602,7 +1614,7 @@ function renderPLSummary() {
         </div>
         <div class="pl-card">
           <div class="pl-card-label">Recognized Job Costs</div>
-          <div class="pl-card-val val-red">${fmt$(totalJobCosts)}</div>
+          <div class="pl-card-val val-red">${fmt$(totalJobCostsAdj)}</div>
           <div class="pl-card-sub">POC-weighted recognized costs</div>
         </div>
         <div class="pl-card">
@@ -1630,8 +1642,9 @@ function renderPLSummary() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
         <div>
           <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Income Breakdown</div>
-          <div class="pl-row"><span class="pl-row-label">Bank Deposits (current)</span><span class="pl-row-val val-green">${fmt$(currentDeposits)}</span></div>
-          ${hasPrior?`<div class="pl-row"><span class="pl-row-label">Prior Period Payments</span><span class="pl-row-val" style="color:var(--green)">${fmt$(priorPayments)}</span></div>`:''}
+          <div class="pl-row"><span class="pl-row-label">Recognized Revenue (POC)</span><span class="pl-row-val val-green">${fmt$(currentRecognizedRev)}</span></div>
+          ${priorRevEntry>0?`<div class="pl-row"><span class="pl-row-label">Prior Period Revenue (2025)</span><span class="pl-row-val" style="color:var(--green)">${fmt$(priorRevEntry)}</span></div>`:''}
+          <div class="pl-row"><span class="pl-row-label" style="color:var(--text-dim)">Bank Deposits YTD</span><span class="pl-row-val" style="color:var(--text-dim)">${fmt$(currentDeposits)}</span></div>
           <div class="pl-row"><span class="pl-row-label">AR Collected (paid)</span><span class="pl-row-val" style="color:var(--sky)">${fmt$(totalARCollected)}</span></div>
           <div class="pl-row"><span class="pl-row-label">Total Invoiced</span><span class="pl-row-val">${fmt$(totalInvoiced)}</span></div>
           <div class="pl-row"><span class="pl-row-label">Retention Held</span><span class="pl-row-val" style="color:var(--gold)">${fmt$(totalRetentionHeld)}</span></div>
