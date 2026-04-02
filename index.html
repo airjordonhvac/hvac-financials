@@ -1603,7 +1603,7 @@ function renderPLSummary() {
         <div class="pl-card">
           <div class="pl-card-label">Recognized Job Costs</div>
           <div class="pl-card-val val-red">${fmt$(totalJobCosts)}</div>
-          <div class="pl-card-sub">POC-weighted &bull; Est. total ${fmt$(totalEstCosts)}</div>
+          <div class="pl-card-sub">POC-weighted recognized costs</div>
         </div>
         <div class="pl-card">
           <div class="pl-card-label">Gross Profit</div>
@@ -3091,6 +3091,40 @@ function saveImportedInvoice(){
 }
 
 
+// ── Coerce Supabase string fields to numbers ──
+function numifyAR(r){
+  return {...r,
+    amount:parseFloat(r.amount)||0, paid:parseFloat(r.paid)||0,
+    retention:parseFloat(r.retention)||0
+  };
+}
+function numifyAP(r){
+  return {...r, amount:parseFloat(r.amount)||0};
+}
+function numifyCL(r){
+  return {...r,
+    limit:parseFloat(r.limit)||0, used:parseFloat(r.used)||0,
+    available:parseFloat(r.available)||0, payment:parseFloat(r.payment)||0
+  };
+}
+function numifyJob(r){
+  return {...r,
+    contract:parseFloat(r.contract)||0,
+    billedToDate:parseFloat(r.billedToDate)||0,
+    retainage:parseFloat(r.retainage)||0,
+    labor:parseFloat(r.labor)||0,
+    materials:parseFloat(r.materials)||0,
+    subs:parseFloat(r.subs)||0,
+    overhead:parseFloat(r.overhead)||0,
+    profit:parseFloat(r.profit)||0,
+    overhead_pct:parseFloat(r.overhead_pct)||0,
+    contingency:parseFloat(r.contingency)||0,
+    bond:parseFloat(r.bond)||0
+  };
+}
+function numifyPayroll(r){
+  return {...r, rate:parseFloat(r.rate)||0, ytd:parseFloat(r.ytd)||0};
+}
 async function loadFromSupabase(){
   if(!sbConfig||!sbConfig.url||!sbConfig.key)return;
   $('syncDot').className='sync-dot syncing';$('syncLabel').textContent='Loading...';
@@ -3105,11 +3139,11 @@ async function loadFromSupabase(){
       fetch(sbConfig.url+'/rest/v1/aj_settings?select=*',{headers:H}).then(r=>r.json()).catch(()=>null),
     ]);
     let changed=false;
-    if(Array.isArray(arR)   &&arR.length>0)  {db.ar=arR;      changed=true;}
-    if(Array.isArray(apR)   &&apR.length>0)  {db.ap=apR;      changed=true;}
-    if(Array.isArray(jobsR) &&jobsR.length>0){db.jobs=jobsR;  changed=true;}
-    if(Array.isArray(payR)  &&payR.length>0) {db.payroll=payR;changed=true;}
-    if(Array.isArray(clR)&&clR.length>0){db.creditLines=clR;changed=true;}
+    if(Array.isArray(arR)   &&arR.length>0)  {db.ar=arR.map(numifyAR);      changed=true;}
+    if(Array.isArray(apR)   &&apR.length>0)  {db.ap=apR.map(numifyAP);      changed=true;}
+    if(Array.isArray(jobsR) &&jobsR.length>0){db.jobs=jobsR.map(numifyJob);  changed=true;}
+    if(Array.isArray(payR)  &&payR.length>0) {db.payroll=payR.map(numifyPayroll);changed=true;}
+    if(Array.isArray(clR)&&clR.length>0){db.creditLines=clR.map(numifyCL);changed=true;}
     if(Array.isArray(settR)){
       settR.forEach(row=>{
         try{
