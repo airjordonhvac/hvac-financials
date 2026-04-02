@@ -911,7 +911,7 @@ async function sbUpsertSettings(rows){
     body:JSON.stringify(rows)
   });
 }
-function syncToSupabase(silent){
+async function syncToSupabase(silent){
   if(!sbConfig.url||!sbConfig.key){if(!silent){toast('Configure Supabase first.','error');openSupabaseConfig();}return;}
   $('syncDot').className='sync-dot syncing';$('syncLabel').textContent='Syncing...';
   try{
