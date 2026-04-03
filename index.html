@@ -564,6 +564,50 @@ select option{background:var(--navy-mid);}
   </div>
   <div id="oh-category-summary"></div>
   <div id="oh-list"></div>
+
+  <!-- CAPITAL EQUIPMENT SECTION -->
+  <div class="chart-wrap" style="margin-top:28px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <div class="chart-title" style="margin:0;">Capital Equipment Purchases</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">One-time asset purchases — vehicles, tools, machinery. Reflected in P&amp;L as a cost.</div>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;">
+        <div style="text-align:right;">
+          <div style="font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">YTD Spend</div>
+          <div id="cap-equip-ytd" style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--orange);">$0</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">All Time</div>
+          <div id="cap-equip-total" style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text-muted);">$0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add form -->
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 2fr auto;gap:10px;align-items:end;margin-bottom:16px;padding:14px;background:var(--navy-mid);border-radius:8px;">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;">Item / Description</div>
+        <input id="ce_name" placeholder="e.g. Nitrogen Cylinder, Van, Milwaukee Kit" style="width:100%;background:var(--navy);border:1px solid var(--navy-border);color:var(--white);border-radius:6px;padding:8px 10px;font-size:13px;outline:none;">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;">Cost ($)</div>
+        <input id="ce_cost" type="number" placeholder="0.00" style="width:100%;background:var(--navy);border:1px solid var(--navy-border);color:var(--white);border-radius:6px;padding:8px 10px;font-size:13px;outline:none;">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;">Purchase Date</div>
+        <input id="ce_date" type="date" style="width:100%;background:var(--navy);border:1px solid var(--navy-border);color:var(--white);border-radius:6px;padding:8px 10px;font-size:13px;outline:none;">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;">Notes (optional)</div>
+        <input id="ce_notes" placeholder="Serial #, project, vendor..." style="width:100%;background:var(--navy);border:1px solid var(--navy-border);color:var(--white);border-radius:6px;padding:8px 10px;font-size:13px;outline:none;">
+      </div>
+      <button onclick="addCapEquip()" class="btn btn-primary" style="white-space:nowrap;">+ Add</button>
+    </div>
+
+    <!-- Equipment list -->
+    <div id="cap-equip-list"></div>
+  </div>
 </div>
 
 </main>
@@ -767,6 +811,7 @@ function saveCreditLine(){
   if(!entry.name){toast('Name is required','error');return;}
   if(!db.creditLines)db.creditLines=[];
 if(!db.withdrawals)db.withdrawals={};
+if(!db.capitalEquipment)db.capitalEquipment=[];
   var idx=db.creditLines.findIndex(function(c){return c.id===id;});
   if(idx>=0){db.creditLines[idx]=entry;}else{db.creditLines.push(entry);}
   save(db);closeCreditLineModal();renderCreditLines();toast('Saved','success');
@@ -845,6 +890,7 @@ function defaultData(){
       Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,
       Jul:0,Aug:0,Sep:0,Oct:0,Nov:0,Dec:0
     },
+    capitalEquipment:[],
     prior:{
       paymentsReceived:0,
       costLabor:0,
@@ -946,6 +992,7 @@ async function syncToSupabase(silent){
     // Overhead, deposits, prior — stored as rows in aj_settings keyed by 'key'
     tasks.push(sbUpsertSettings([
       {key:'overhead',value:JSON.stringify(db.overhead||[])},
+      {key:'capitalEquipment',value:JSON.stringify(db.capitalEquipment||[])},
       {key:'deposits',value:JSON.stringify(db.deposits||{})},
       {key:'prior',value:JSON.stringify(db.prior||{})}
     ]));
@@ -1010,7 +1057,8 @@ document.querySelectorAll('.tab').forEach(t=>{
     document.querySelectorAll('.page-section').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
     $('tab-'+t.dataset.tab).classList.add('active');
-    const renders={dashboard:renderDashboard,ar:renderAR,ap:function(){renderAP();renderCreditLines();},jobs:renderJobs,aging:renderAging,payroll:renderPayroll,overhead:renderOverhead};
+    const renders={dashboard:renderDashboard,ar:renderAR,ap:function(){renderAP();renderCreditLines();},jobs:renderJobs,aging:renderAging,payroll:renderPayroll,overhead:()=>{renderOverhead();renderCapitalEquipment();}
+  };
     if(renders[t.dataset.tab])renders[t.dataset.tab]();  });
 });
 $('todayDate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
@@ -1660,7 +1708,11 @@ function renderPLSummary() {
   const priorRevEntry = db.prior.priorRevenue||0;
   const priorJobCostsEntry = db.prior.priorJobCosts||0;
   const totalRecognizedRev = currentRecognizedRev + priorRevEntry;
-  const totalJobCostsAdj   = totalJobCosts + priorJobCostsEntry;
+  const yr=new Date().getFullYear();
+  const totalCapEquip=(db.capitalEquipment||[])
+    .filter(e=>e.purchaseDate&&e.purchaseDate.startsWith(yr+''))
+    .reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  const totalJobCostsAdj   = totalJobCosts + priorJobCostsEntry + totalCapEquip;
   const grossProfit = totalRecognizedRev - totalJobCostsAdj;
   const grossMargin = totalRecognizedRev > 0 ? ((grossProfit / totalRecognizedRev) * 100).toFixed(1) : 0;
   // Net profit = gross minus actual YTD fixed overhead and payroll
@@ -1727,6 +1779,7 @@ function renderPLSummary() {
           <div class="pl-row"><span class="pl-row-label">Subcontractors</span><span class="pl-row-val" style="color:#9a7ae8">${fmt$(totalSubs)}</span></div>
           <div class="pl-row"><span class="pl-row-label">Job Overhead</span><span class="pl-row-val">${fmt$(totalJobOverhead)}</span></div>
           
+          ${totalCapEquip>0?`<div class="pl-row"><span class="pl-row-label">Capital Equipment (YTD)</span><span class="pl-row-val" style="color:var(--orange)">${fmt$(totalCapEquip)}</span></div>`:''}
           <div class="pl-row"><span class="pl-row-label">Fixed Overhead (${activeMos}-mo YTD)</span><span class="pl-row-val" style="color:var(--gold)">${fmt$(totalFixedOverhead)}</span></div>
           <div class="pl-row"><span class="pl-row-label">Payroll (YTD)</span><span class="pl-row-val" style="color:var(--gold)">${fmt$(totalPayroll)}</span></div>
           <div class="pl-net-row">
@@ -2183,6 +2236,51 @@ function runOverheadGeneration(){
   }
 }
 
+function renderCapitalEquipment(){
+  if(!db.capitalEquipment) db.capitalEquipment=[];
+  const yr = new Date().getFullYear();
+  const ytdTotal = db.capitalEquipment
+    .filter(e=>e.purchaseDate&&e.purchaseDate.startsWith(yr+''))
+    .reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  const allTotal = db.capitalEquipment.reduce((s,e)=>s+(parseFloat(e.cost)||0),0);
+  $('cap-equip-list').innerHTML = db.capitalEquipment.length===0
+    ? '<div style="color:var(--text-dim);font-size:13px;padding:16px 0;">No equipment logged yet.</div>'
+    : db.capitalEquipment.map((e,i)=>`
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--white)">${e.name}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${e.purchaseDate||''}  ${e.notes?'— '+e.notes:''}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">${e.purchaseDate?.substring(0,4)||'—'}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--orange);white-space:nowrap">${fmt$(parseFloat(e.cost)||0)}</div>
+        <button onclick="deleteCapEquip(${i})" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 6px;" title="Delete">✕</button>
+      </div>`).join('');
+  $('cap-equip-ytd').textContent = fmt$(ytdTotal);
+  $('cap-equip-total').textContent = fmt$(allTotal);
+}
+function addCapEquip(){
+  const name = $('ce_name').value.trim();
+  const cost = parseFloat($('ce_cost').value)||0;
+  const date = $('ce_date').value;
+  const notes = $('ce_notes').value.trim();
+  if(!name||!cost){toast('Name and cost required','error');return;}
+  if(!db.capitalEquipment) db.capitalEquipment=[];
+  db.capitalEquipment.push({id:'CE-'+Date.now(),name,cost,purchaseDate:date,notes});
+  db.capitalEquipment.sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+  save(db);
+  renderCapitalEquipment();
+  renderPLSummary();
+  $('ce_name').value='';$('ce_cost').value='';$('ce_notes').value='';
+  toast('Equipment added','success');
+}
+function deleteCapEquip(i){
+  if(!confirm('Remove this equipment entry?')) return;
+  db.capitalEquipment.splice(i,1);
+  save(db);
+  renderCapitalEquipment();
+  renderPLSummary();
+  toast('Equipment removed','success');
+}
 function renderOverhead(){
   if(!db.overhead) db.overhead=[];
   // Payroll monthly equivalent
@@ -3231,6 +3329,7 @@ async function loadFromSupabase(){
       settR.forEach(row=>{
         try{
           if(row.key==='overhead') db.overhead=JSON.parse(row.value)||[];
+          if(row.key==='capitalEquipment') db.capitalEquipment=JSON.parse(row.value)||[];
           if(row.key==='deposits') db.deposits=JSON.parse(row.value)||db.deposits;
           if(row.key==='prior') db.prior=JSON.parse(row.value)||db.prior;
           changed=true;
