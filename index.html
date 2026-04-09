@@ -1992,6 +1992,66 @@ function savePayRun(){
   save(db); closeModal(); renderPayroll(); renderPLSummary();
   toast(is1099?'Sub payment logged':'Pay run logged','success');
 }
+function editPayRun(id){
+  const r = (db.payRuns||[]).find(x=>x.id===id);
+  if(!r) return;
+  window.__editingPayRunId = id;
+  openModal('payrun');
+  setTimeout(()=>{
+    // Set payment type radio
+    const is1099 = r.is1099||false;
+    const radio = document.getElementById(is1099?'pr_type_1099':'pr_type_w2');
+    if(radio){ radio.checked=true; togglePayRunType(); }
+    // Populate fields
+    if(is1099){
+      const subEl=$('f_pr_subname'); if(subEl) subEl.value=r.subName||'';
+    } else {
+      const empEl=$('f_pr_emp'); if(empEl) empEl.value=r.employeeId||'';
+    }
+    const set=(id,v)=>{const el=$('f_pr_'+id);if(el)el.value=v||'';};
+    set('date', r.date); set('ref', r.ref);
+    set('start', r.periodStart); set('end', r.periodEnd);
+    set('gross', r.gross||''); set('tax', r.taxWithheld||'');
+    set('burden', r.employerBurden||''); set('net', r.net||'');
+    set('notes', r.notes||'');
+    // Update modal title and button
+    const title = document.querySelector('#modal-content .modal-title');
+    if(title) title.textContent = 'Edit Pay Run';
+    const btn = Array.from(document.querySelectorAll('#modal-content button'))
+      .find(b=>b.textContent==='Log Payment');
+    if(btn){ btn.textContent='Save Changes'; btn.onclick=updatePayRun; }
+  },100);
+}
+function updatePayRun(){
+  const id = window.__editingPayRunId;
+  if(!id) return;
+  const idx = (db.payRuns||[]).findIndex(x=>x.id===id);
+  if(idx===-1) return;
+  const is1099 = document.getElementById('pr_type_1099')?.checked||false;
+  const gross  = parseFloat($('f_pr_gross')?.value)||0;
+  if(!gross) return toast('Amount required','error');
+  const updated = {...db.payRuns[idx],
+    is1099, date: val('f_pr_date'), ref: val('f_pr_ref'),
+    periodStart: val('f_pr_start'), periodEnd: val('f_pr_end'),
+    gross, taxWithheld: parseFloat($('f_pr_tax')?.value)||0,
+    employerBurden: parseFloat($('f_pr_burden')?.value)||0,
+    net: parseFloat($('f_pr_net')?.value)||gross,
+    notes: val('f_pr_notes')
+  };
+  if(is1099){
+    updated.subName = val('f_pr_subname')||'';
+    updated.employeeId=''; updated.employeeName='';
+  } else {
+    const empId = val('f_pr_emp');
+    const emp = db.payroll.find(e=>e.id===empId)||{name:'Unknown'};
+    updated.employeeId=empId; updated.employeeName=emp.name;
+    updated.subName='';
+  }
+  db.payRuns[idx]=updated;
+  window.__editingPayRunId=null;
+  save(db); closeModal(); renderPayroll(); renderPLSummary();
+  toast('Pay run updated','success');
+}
 function deletePayRun(id){
   if(!confirm('Remove this pay run?')) return;
   db.payRuns = (db.payRuns||[]).filter(r=>r.id!==id);
@@ -2076,7 +2136,10 @@ function renderPayroll(){
             ${r.ref?`<span style="font-size:10px;color:var(--text-dim);margin-left:6px;">#${r.ref}</span>`:''}
             ${r.periodStart?'<span style="font-size:10px;color:var(--text-dim);margin-left:6px;">'+r.periodStart+' → '+r.periodEnd+'</span>':''}
           </div>
-          <button onclick="deletePayRun('${r.id}')" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 6px;" title="Delete">✕</button>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <button onclick="editPayRun('${r.id}')" style="background:transparent;border:1px solid var(--navy-border);color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px 8px;border-radius:4px;" title="Edit">Edit</button>
+            <button onclick="deletePayRun('${r.id}')" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 6px;" title="Delete">✕</button>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;">
           <div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;">Gross</div><div class="mono" style="color:var(--white)">${fmt$(r.gross)}</div></div>
