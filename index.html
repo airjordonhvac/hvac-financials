@@ -574,6 +574,17 @@ select option{background:var(--navy-mid);}
     </div>
 
   </div>
+
+  <!-- 1099 SUB TRACKER -->
+  <div class="chart-wrap" style="margin-top:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div>
+        <div class="chart-title" style="margin:0;">1099 Subcontractor Tracker</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">YTD payments per sub — flag crosses $600 threshold for 1099-NEC filing</div>
+      </div>
+    </div>
+    <div id="sub-1099-list"></div>
+  </div>
 </div>
 
 <!-- OVERHEAD -->
@@ -1884,25 +1895,102 @@ function savePayroll(){
   db.payroll.push(emp);
   save(db); closeModal(); renderPayroll(); toast('Employee saved','success');
 }
+function togglePayRunType(){
+  const is1099 = document.getElementById('pr_type_1099')?.checked;
+  const empRow    = document.getElementById('pr_emp_row');
+  const subRow    = document.getElementById('pr_sub_row');
+  const taxRow    = document.getElementById('pr_tax_row');
+  const burdenRow = document.getElementById('pr_burden_row');
+  const netRow    = document.getElementById('pr_net_row');
+  if(empRow)    empRow.style.display    = is1099 ? 'none'  : '';
+  if(subRow)    subRow.style.display    = is1099 ? ''      : 'none';
+  if(taxRow)    taxRow.style.display    = is1099 ? 'none'  : '';
+  if(burdenRow) burdenRow.style.display = is1099 ? 'none'  : '';
+  if(netRow)    netRow.style.display    = is1099 ? 'none'  : '';
+}
+function render1099Tracker(){
+  const el = $('sub-1099-list');
+  if(!el) return;
+  const subRuns = (db.payRuns||[]).filter(r=>r.is1099 && r.subName);
+  if(!subRuns.length){
+    el.innerHTML='<div style="color:var(--text-dim);font-size:13px;padding:12px 0;">No 1099 payments logged yet. Use + Log Pay Run → 1099 Subcontractor.</div>';
+    return;
+  }
+  // Group by sub name
+  const byName = {};
+  subRuns.forEach(r=>{
+    if(!byName[r.subName]) byName[r.subName]={total:0,runs:[],latest:''};
+    byName[r.subName].total += (r.gross||0);
+    byName[r.subName].runs.push(r);
+    if(!byName[r.subName].latest || r.date > byName[r.subName].latest) byName[r.subName].latest=r.date;
+  });
+  const THRESHOLD = 600;
+  el.innerHTML = Object.entries(byName)
+    .sort((a,b)=>b[1].total-a[1].total)
+    .map(([name,data])=>{
+      const pct = Math.min(100, Math.round((data.total/THRESHOLD)*100));
+      const over = data.total >= THRESHOLD;
+      const barColor = over ? 'var(--red)' : data.total>=400 ? 'var(--orange)' : '#c084fc';
+      const badge = over
+        ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#ff000030;color:var(--red);">⚠ 1099-NEC REQUIRED</span>`
+        : data.total>=400
+        ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#e8923a30;color:var(--orange);">APPROACHING $600</span>`
+        : `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#c084fc20;color:#c084fc;">UNDER $600</span>`;
+      return `<div style="background:var(--navy-mid);border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:600;font-size:14px;">${name}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${data.runs.length} payment${data.runs.length!==1?'s':''} · Last: ${data.latest}</div>
+          </div>
+          <div style="text-align:right;">
+            ${badge}
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${barColor};margin-top:2px;">${fmt$(data.total)}</div>
+          </div>
+        </div>
+        <div style="background:var(--navy);border-radius:4px;height:6px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:4px;">
+          <span>$0</span><span style="color:${over?'var(--red)':'var(--text-dim)'};">$600 threshold</span>
+        </div>
+      </div>`;
+    }).join('');
+}
 function savePayRun(){
   if(!db.payRuns) db.payRuns=[];
-  const empId  = val('f_pr_emp');
-  const emp    = db.payroll.find(e=>e.id===empId)||{name:'Unknown'};
-  const gross  = parseFloat($('f_pr_gross')?.value)||0;
-  const tax    = parseFloat($('f_pr_tax')?.value)||0;
-  const burden = parseFloat($('f_pr_burden')?.value)||Math.round(gross*0.0765*100)/100;
-  const net    = parseFloat($('f_pr_net')?.value)||(gross-tax);
-  if(!gross) return toast('Gross pay required','error');
-  const run = {
-    id:'PR-'+Date.now(), employeeId:empId, employeeName:emp.name,
-    date: val('f_pr_date')||today(),
-    periodStart: val('f_pr_start'), periodEnd: val('f_pr_end'),
-    gross, taxWithheld:tax, employerBurden:burden, net,
-    notes: val('f_pr_notes')
-  };
+  const is1099  = document.getElementById('pr_type_1099')?.checked||false;
+  const gross   = parseFloat($('f_pr_gross')?.value)||0;
+  if(!gross) return toast('Amount required','error');
+  let run;
+  if(is1099){
+    const subName = val('f_pr_subname')||'';
+    if(!subName) return toast('Subcontractor name required','error');
+    run = {
+      id:'PR-'+Date.now(), is1099:true, subName,
+      date: val('f_pr_date')||today(),
+      ref: val('f_pr_ref'),
+      periodStart: val('f_pr_start'), periodEnd: val('f_pr_end'),
+      gross, taxWithheld:0, employerBurden:0, net:gross,
+      notes: val('f_pr_notes')
+    };
+  } else {
+    const empId = val('f_pr_emp');
+    const emp   = db.payroll.find(e=>e.id===empId)||{name:'Unknown'};
+    const tax   = parseFloat($('f_pr_tax')?.value)||0;
+    const burden= parseFloat($('f_pr_burden')?.value)||Math.round(gross*0.0765*100)/100;
+    const net   = parseFloat($('f_pr_net')?.value)||(gross-tax);
+    run = {
+      id:'PR-'+Date.now(), is1099:false, employeeId:empId, employeeName:emp.name,
+      date: val('f_pr_date')||today(),
+      ref: val('f_pr_ref'),
+      periodStart: val('f_pr_start'), periodEnd: val('f_pr_end'),
+      gross, taxWithheld:tax, employerBurden:burden, net,
+      notes: val('f_pr_notes')
+    };
+  }
   db.payRuns.unshift(run);
   save(db); closeModal(); renderPayroll(); renderPLSummary();
-  toast('Pay run logged','success');
+  toast(is1099?'Sub payment logged':'Pay run logged','success');
 }
 function deletePayRun(id){
   if(!confirm('Remove this pay run?')) return;
@@ -1933,6 +2021,7 @@ function renderPayroll(){
     {l:'NET PAID OUT',      v:fmt$(ytdNet),   c:'var(--green)'},
     {l:'W2 EMPLOYEES',      v:w2Count,        c:'var(--sky)'},
     {l:'1099 CONTRACTORS',  v:c99Count,       c:'#c084fc'},
+    {l:'1099 YTD PAID',     v:fmt$((db.payRuns||[]).filter(r=>r.is1099).reduce((s,r)=>s+(r.gross||0),0)), c:'#c084fc'},
   ].map(c=>`<div style="background:var(--navy-mid);border-radius:8px;padding:14px 16px;">
     <div style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">${c.l}</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:${c.c};">${c.v}</div>
@@ -1980,8 +2069,11 @@ function renderPayroll(){
       <div style="background:var(--navy-mid);border-radius:8px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <div>
-            <span style="font-weight:600;font-size:13px;">${r.employeeName}</span>
+            ${r.is1099
+              ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;background:#c084fc20;color:#c084fc;margin-right:6px;">1099</span><span style="font-weight:600;font-size:13px;">${r.subName||'Unknown Sub'}</span>`
+              : `<span style="font-weight:600;font-size:13px;">${r.employeeName||'Unknown'}</span>`}
             <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${r.date}</span>
+            ${r.ref?`<span style="font-size:10px;color:var(--text-dim);margin-left:6px;">#${r.ref}</span>`:''}
             ${r.periodStart?'<span style="font-size:10px;color:var(--text-dim);margin-left:6px;">'+r.periodStart+' → '+r.periodEnd+'</span>':''}
           </div>
           <button onclick="deletePayRun('${r.id}')" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 6px;" title="Delete">✕</button>
@@ -1994,6 +2086,9 @@ function renderPayroll(){
         </div>
         ${r.notes?'<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">'+r.notes+'</div>':''}
       </div>`).join('');
+
+  // Render 1099 tracker
+  render1099Tracker();
 }
 
 function editPayroll(id){
@@ -2117,20 +2212,31 @@ function openModal(type){
         <button class="btn btn-primary" onclick="saveRecord('job')">Save Job</button>
       </div>`,
     payrun:`<div class="modal-title">Log Pay Run</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 12px;background:var(--navy-mid);border-radius:8px;">
+        <label style="font-size:12px;color:var(--text-muted);font-weight:600;">Payment type:</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="pr_type" value="w2" id="pr_type_w2" checked onchange="togglePayRunType()"> W2 Employee
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:#c084fc;">
+          <input type="radio" name="pr_type" value="1099" id="pr_type_1099" onchange="togglePayRunType()"> 1099 Subcontractor
+        </label>
+      </div>
       <div class="form-grid">
-        <div class="form-group"><label>Employee</label><select id="f_pr_emp">${(db.payroll||[]).map(e=>`<option value="${e.id}">${e.name} (${e.workerType||'W2'})</option>`).join('')}</select></div>
+        <div class="form-group" id="pr_emp_row"><label>Employee</label><select id="f_pr_emp">${(db.payroll||[]).filter(e=>e.workerType!=='1099').map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}</select></div>
+        <div class="form-group" id="pr_sub_row" style="display:none;"><label>Subcontractor Name</label><input id="f_pr_subname" placeholder="e.g. Construct Comfort LLC" list="sub-datalist"><datalist id="sub-datalist">${[...new Set((db.payRuns||[]).filter(r=>r.is1099).map(r=>r.subName).filter(Boolean))].map(n=>`<option value="${n}">`).join('')}</datalist></div>
         <div class="form-group"><label>Pay Date</label><input type="date" id="f_pr_date" value="${today()}"></div>
+        <div class="form-group"><label>Invoice / Ref #</label><input id="f_pr_ref" placeholder="e.g. INV-001"></div>
         <div class="form-group"><label>Period Start</label><input type="date" id="f_pr_start"></div>
         <div class="form-group"><label>Period End</label><input type="date" id="f_pr_end"></div>
-        <div class="form-group"><label>Gross Pay ($)</label><input type="number" id="f_pr_gross" placeholder="0.00" oninput="calcPayRunNet()"></div>
-        <div class="form-group"><label>Tax Withheld ($) <span style="font-size:10px;color:var(--text-muted)">Fed+State+FICA EE</span></label><input type="number" id="f_pr_tax" placeholder="0.00" oninput="calcPayRunNet()"></div>
-        <div class="form-group"><label>Employer Burden ($) <span style="font-size:10px;color:var(--text-muted)">FICA ER 7.65%</span></label><input type="number" id="f_pr_burden" placeholder="0.00"></div>
-        <div class="form-group"><label>Net Pay ($)</label><input type="number" id="f_pr_net" placeholder="auto-calc" style="color:var(--green)"></div>
-        <div class="form-group" style="grid-column:1/-1"><label>Notes</label><input id="f_pr_notes" placeholder="e.g. Bi-weekly, includes bonus"></div>
+        <div class="form-group"><label>Amount Paid ($)</label><input type="number" id="f_pr_gross" placeholder="0.00" oninput="calcPayRunNet()"></div>
+        <div class="form-group" id="pr_tax_row"><label>Tax Withheld ($) <span style="font-size:10px;color:var(--text-muted)">W2 only</span></label><input type="number" id="f_pr_tax" placeholder="0.00" oninput="calcPayRunNet()"></div>
+        <div class="form-group" id="pr_burden_row"><label>Employer Burden ($) <span style="font-size:10px;color:var(--text-muted)">FICA ER 7.65%</span></label><input type="number" id="f_pr_burden" placeholder="0.00"></div>
+        <div class="form-group" id="pr_net_row"><label>Net Pay ($)</label><input type="number" id="f_pr_net" placeholder="auto-calc" style="color:var(--green)"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Notes</label><input id="f_pr_notes" placeholder="e.g. Framing labor, Chase job"></div>
       </div>
       <div class="form-actions">
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="savePayRun()">Log Pay Run</button>
+        <button class="btn btn-primary" onclick="savePayRun()">Log Payment</button>
       </div>`,
   overhead:`<div class="modal-title">Add Recurring Overhead</div>
       <div class="form-grid">
