@@ -541,15 +541,38 @@ select option{background:var(--navy-mid);}
 
 <!-- PAYROLL -->
 <div class="page-section" id="tab-payroll">
-  <div class="section-header">
-    <div class="section-title">Payroll</div>
-    <button class="btn btn-primary" onclick="openModal('payroll')">+ Add Employee</button>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Employee</th><th>Role</th><th>Pay Type</th><th class="text-right">Rate</th><th class="text-right">Last Payroll Est.</th><th class="text-right">YTD Paid</th><th>Actions</th></tr></thead>
-      <tbody id="payroll-body"></tbody>
-    </table>
+  <!-- Summary cards -->
+  <div id="payroll-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;"></div>
+
+  <!-- Two-column layout -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+
+    <!-- ROSTER -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div class="chart-title" style="margin:0;">Employee Roster</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="pay-dept-filter" onchange="renderPayroll()" style="background:var(--navy-mid);border:1px solid var(--navy-border);color:var(--text-muted);border-radius:6px;padding:4px 8px;font-size:11px;outline:none;">
+            <option value="">All Depts</option><option value="Field">Field</option><option value="Office">Office</option>
+          </select>
+          <select id="pay-type-filter" onchange="renderPayroll()" style="background:var(--navy-mid);border:1px solid var(--navy-border);color:var(--text-muted);border-radius:6px;padding:4px 8px;font-size:11px;outline:none;">
+            <option value="">W2 + 1099</option><option value="W2">W2 Only</option><option value="1099">1099 Only</option>
+          </select>
+          <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;" onclick="openModal('payroll')">+ Employee</button>
+        </div>
+      </div>
+      <div id="payroll-roster"></div>
+    </div>
+
+    <!-- PAY RUNS -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="chart-title" style="margin:0;">Pay Runs</div>
+        <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;" onclick="openModal('payrun')">+ Log Pay Run</button>
+      </div>
+      <div id="payroll-runs"></div>
+    </div>
+
   </div>
 </div>
 
@@ -812,6 +835,7 @@ function saveCreditLine(){
   if(!db.creditLines)db.creditLines=[];
 if(!db.withdrawals)db.withdrawals={};
 if(!db.capitalEquipment)db.capitalEquipment=[];
+if(!db.payRuns)db.payRuns=[];
   var idx=db.creditLines.findIndex(function(c){return c.id===id;});
   if(idx>=0){db.creditLines[idx]=entry;}else{db.creditLines.push(entry);}
   save(db);closeCreditLineModal();renderCreditLines();toast('Saved','success');
@@ -879,8 +903,9 @@ function defaultData(){
     creditLines:[],
     jobs:[],
     payroll:[
-      {id:'EMP-001',name:'Jordon Williams',role:'Owner/Operator',payType:'salary',rate:95000,ytd:23750},
+      {id:'EMP-001',name:'Jordon Biagas',role:'Owner/Operator',payType:'salary',rate:60000,ytd:15000,workerType:'W2',department:'Office'},
     ],
+    payRuns:[],
     overhead:[],
     deposits:{
       Jan:0,Feb:0,Mar:0,Apr:0,May:0,Jun:0,
@@ -993,6 +1018,7 @@ async function syncToSupabase(silent){
     tasks.push(sbUpsertSettings([
       {key:'overhead',value:JSON.stringify(db.overhead||[])},
       {key:'capitalEquipment',value:JSON.stringify(db.capitalEquipment||[])},
+      {key:'payRuns',value:JSON.stringify(db.payRuns||[])},
       {key:'deposits',value:JSON.stringify(db.deposits||{})},
       {key:'prior',value:JSON.stringify(db.prior||{})}
     ]));
@@ -1697,7 +1723,10 @@ function renderPLSummary() {
   const annualizedOverhead = Math.round(ohMonthlyRate * 12);
 
   // ── Payroll (YTD actual + prior period) ──
-  const totalPayroll = db.payroll.reduce((s, e) => s + (e.ytd || 0), 0) + priorPayroll;
+  const payRunsYTD = (db.payRuns&&db.payRuns.length>0)
+    ? (db.payRuns||[]).reduce((s,r)=>s+(r.gross||0)+(r.employerBurden||0),0)
+    : db.payroll.reduce((s,e)=>s+(e.ytd||0),0);
+  const totalPayroll = payRunsYTD + priorPayroll;
 
   // ── P&L — all YTD actuals, same time window ──
   // Gross profit = deposits minus estimated job costs (what was earned vs spent on jobs)
@@ -1833,22 +1862,138 @@ function renderAging(){
 }
 
 // ─── PAYROLL ─────────────────────────────────────────────────────────────────
+function calcPayRunNet(){
+  const gross = parseFloat($('f_pr_gross')?.value)||0;
+  const tax   = parseFloat($('f_pr_tax')?.value)||0;
+  const net   = gross - tax;
+  if($('f_pr_net')) $('f_pr_net').value = net>0?net.toFixed(2):'';
+  // Auto-fill employer burden at 7.65% if blank
+  const bEl = $('f_pr_burden');
+  if(bEl && !bEl.value) bEl.value = (gross*0.0765).toFixed(2);
+}
+function savePayroll(){
+  const name = val('f_name'); const role = val('f_role');
+  if(!name) return toast('Name required','error');
+  const emp = {
+    id: 'EMP-'+Date.now(), name, role,
+    workerType: val('f_workerType')||'W2',
+    department: val('f_department')||'Field',
+    payType: val('f_payType')||'hourly',
+    rate: num('f_rate')
+  };
+  db.payroll.push(emp);
+  save(db); closeModal(); renderPayroll(); toast('Employee saved','success');
+}
+function savePayRun(){
+  if(!db.payRuns) db.payRuns=[];
+  const empId  = val('f_pr_emp');
+  const emp    = db.payroll.find(e=>e.id===empId)||{name:'Unknown'};
+  const gross  = parseFloat($('f_pr_gross')?.value)||0;
+  const tax    = parseFloat($('f_pr_tax')?.value)||0;
+  const burden = parseFloat($('f_pr_burden')?.value)||Math.round(gross*0.0765*100)/100;
+  const net    = parseFloat($('f_pr_net')?.value)||(gross-tax);
+  if(!gross) return toast('Gross pay required','error');
+  const run = {
+    id:'PR-'+Date.now(), employeeId:empId, employeeName:emp.name,
+    date: val('f_pr_date')||today(),
+    periodStart: val('f_pr_start'), periodEnd: val('f_pr_end'),
+    gross, taxWithheld:tax, employerBurden:burden, net,
+    notes: val('f_pr_notes')
+  };
+  db.payRuns.unshift(run);
+  save(db); closeModal(); renderPayroll(); renderPLSummary();
+  toast('Pay run logged','success');
+}
+function deletePayRun(id){
+  if(!confirm('Remove this pay run?')) return;
+  db.payRuns = (db.payRuns||[]).filter(r=>r.id!==id);
+  save(db); renderPayroll(); renderPLSummary();
+  toast('Pay run removed','success');
+}
 function renderPayroll(){
-  $('payroll-body').innerHTML=db.payroll.length?db.payroll.map(e=>{
-    const last=e.payType==='salary'?e.rate/26:e.rate*80;
-    return `<tr>
-      <td><div style="font-weight:500">${e.name}</div></td>
-      <td style="color:var(--text-muted)">${e.role}</td>
-      <td><span class="badge ${e.payType==='salary'?'badge-partial':'badge-pending'}">${e.payType}</span></td>
-      <td class="mono text-right">${e.payType==='salary'?fmt$(e.rate)+'/yr':'$'+e.rate+'/hr'}</td>
-      <td class="mono text-right" style="color:var(--green)">${fmt$(last)}</td>
-      <td class="mono text-right" style="color:var(--sky)">${fmt$(e.ytd)}</td>
-      <td style="display:flex;gap:6px;">
-        <button class="btn btn-ghost btn-sm" onclick="editPayroll('${e.id}')">Edit</button>
-        <button class="btn btn-danger" onclick="deleteRecord('payroll','${e.id}')">Del</button>
-      </td>
-    </tr>`;
-  }).join(''):'<tr><td colspan="7"><div class="empty"><div class="empty-icon">👷</div><div class="empty-text">No employees yet</div></div></td></tr>';
+  if(!db.payRuns) db.payRuns=[];
+  const deptF = $('pay-dept-filter')?.value||'';
+  const typeF = $('pay-type-filter')?.value||'';
+  let emps = db.payroll||[];
+  if(deptF) emps=emps.filter(e=>e.department===deptF);
+  if(typeF) emps=emps.filter(e=>e.workerType===typeF);
+
+  // Summary cards
+  const ytdGross  = (db.payRuns||[]).reduce((s,r)=>s+(r.gross||0),0);
+  const ytdTax    = (db.payRuns||[]).reduce((s,r)=>s+(r.taxWithheld||0),0);
+  const ytdBurden = (db.payRuns||[]).reduce((s,r)=>s+(r.employerBurden||0),0);
+  const ytdNet    = (db.payRuns||[]).reduce((s,r)=>s+(r.net||0),0);
+  const w2Count   = (db.payroll||[]).filter(e=>e.workerType==='W2').length;
+  const c99Count  = (db.payroll||[]).filter(e=>e.workerType==='1099').length;
+  const summEl = $('payroll-summary');
+  if(summEl) summEl.innerHTML = [
+    {l:'YTD GROSS PAYROLL', v:fmt$(ytdGross), c:'var(--sky)'},
+    {l:'TAXES WITHHELD',    v:fmt$(ytdTax),   c:'var(--gold)'},
+    {l:'EMPLOYER BURDEN',   v:fmt$(ytdBurden),c:'var(--orange)'},
+    {l:'NET PAID OUT',      v:fmt$(ytdNet),   c:'var(--green)'},
+    {l:'W2 EMPLOYEES',      v:w2Count,        c:'var(--sky)'},
+    {l:'1099 CONTRACTORS',  v:c99Count,       c:'#c084fc'},
+  ].map(c=>`<div style="background:var(--navy-mid);border-radius:8px;padding:14px 16px;">
+    <div style="font-size:10px;font-weight:600;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">${c.l}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:${c.c};">${c.v}</div>
+  </div>`).join('');
+
+  // Roster cards
+  const rosterEl = $('payroll-roster');
+  if(rosterEl) rosterEl.innerHTML = emps.length===0
+    ? '<div style="color:var(--text-dim);font-size:13px;padding:16px 0;">No employees match filter.</div>'
+    : emps.map(e=>{
+        const empRuns = (db.payRuns||[]).filter(r=>r.employeeId===e.id);
+        const empYTD  = empRuns.reduce((s,r)=>s+(r.gross||0),0);
+        const lastRun = empRuns[0];
+        const rateStr = e.payType==='salary'?fmt$(e.rate)+'/yr':e.payType==='draw'?fmt$(e.rate)+'/draw':'$'+e.rate+'/hr';
+        const w2Color = e.workerType==='1099'?'#c084fc':'var(--sky)';
+        const deptColor = e.department==='Field'?'var(--orange)':'var(--green)';
+        return `<div style="background:var(--navy-mid);border-radius:8px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+            <div>
+              <div style="font-weight:600;font-size:14px;">${e.name}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${e.role}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${w2Color}22;color:${w2Color};">${e.workerType||'W2'}</span>
+              <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${deptColor}22;color:${deptColor};">${e.department||'Field'}</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+            <div><div style="color:var(--text-muted);font-size:10px;">RATE</div><div class="mono">${rateStr}</div></div>
+            <div><div style="color:var(--text-muted);font-size:10px;">YTD GROSS</div><div class="mono" style="color:var(--sky)">${fmt$(empYTD)}</div></div>
+            <div><div style="color:var(--text-muted);font-size:10px;">LAST RUN</div><div class="mono">${lastRun?lastRun.date:'—'}</div></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px;">
+            <button class="btn btn-ghost btn-sm" onclick="editPayroll('${e.id}')">Edit</button>
+            <button class="btn btn-danger" onclick="deleteRecord('payroll','${e.id}')">Del</button>
+          </div>
+        </div>`;
+      }).join('');
+
+  // Pay runs log
+  const runsEl = $('payroll-runs');
+  if(runsEl) runsEl.innerHTML = (db.payRuns||[]).length===0
+    ? '<div style="color:var(--text-dim);font-size:13px;padding:16px 0;">No pay runs logged yet. Click + Log Pay Run to start.</div>'
+    : (db.payRuns||[]).map(r=>`
+      <div style="background:var(--navy-mid);border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div>
+            <span style="font-weight:600;font-size:13px;">${r.employeeName}</span>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">${r.date}</span>
+            ${r.periodStart?'<span style="font-size:10px;color:var(--text-dim);margin-left:6px;">'+r.periodStart+' → '+r.periodEnd+'</span>':''}
+          </div>
+          <button onclick="deletePayRun('${r.id}')" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 6px;" title="Delete">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;">
+          <div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;">Gross</div><div class="mono" style="color:var(--white)">${fmt$(r.gross)}</div></div>
+          <div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;">Tax Withheld</div><div class="mono" style="color:var(--gold)">${fmt$(r.taxWithheld||0)}</div></div>
+          <div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;">ER Burden</div><div class="mono" style="color:var(--orange)">${fmt$(r.employerBurden||0)}</div></div>
+          <div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;">Net Paid</div><div class="mono" style="color:var(--green)">${fmt$(r.net||0)}</div></div>
+        </div>
+        ${r.notes?'<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">'+r.notes+'</div>':''}
+      </div>`).join('');
 }
 
 function editPayroll(id){
@@ -1971,7 +2116,23 @@ function openModal(type){
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveRecord('job')">Save Job</button>
       </div>`,
-    overhead:`<div class="modal-title">Add Recurring Overhead</div>
+    payrun:`<div class="modal-title">Log Pay Run</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Employee</label><select id="f_pr_emp">${(db.payroll||[]).map(e=>`<option value="${e.id}">${e.name} (${e.workerType||'W2'})</option>`).join('')}</select></div>
+        <div class="form-group"><label>Pay Date</label><input type="date" id="f_pr_date" value="${today()}"></div>
+        <div class="form-group"><label>Period Start</label><input type="date" id="f_pr_start"></div>
+        <div class="form-group"><label>Period End</label><input type="date" id="f_pr_end"></div>
+        <div class="form-group"><label>Gross Pay ($)</label><input type="number" id="f_pr_gross" placeholder="0.00" oninput="calcPayRunNet()"></div>
+        <div class="form-group"><label>Tax Withheld ($) <span style="font-size:10px;color:var(--text-muted)">Fed+State+FICA EE</span></label><input type="number" id="f_pr_tax" placeholder="0.00" oninput="calcPayRunNet()"></div>
+        <div class="form-group"><label>Employer Burden ($) <span style="font-size:10px;color:var(--text-muted)">FICA ER 7.65%</span></label><input type="number" id="f_pr_burden" placeholder="0.00"></div>
+        <div class="form-group"><label>Net Pay ($)</label><input type="number" id="f_pr_net" placeholder="auto-calc" style="color:var(--green)"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Notes</label><input id="f_pr_notes" placeholder="e.g. Bi-weekly, includes bonus"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="savePayRun()">Log Pay Run</button>
+      </div>`,
+  overhead:`<div class="modal-title">Add Recurring Overhead</div>
       <div class="form-grid">
         <div class="form-group"><label>Name / Description</label><input id="f_name" placeholder="e.g. General Liability Insurance"></div>
         <div class="form-group"><label>Category</label>
@@ -2005,13 +2166,14 @@ function openModal(type){
       <div class="form-grid">
         <div class="form-group"><label>Full Name</label><input id="f_name" placeholder="e.g. Marcus T."></div>
         <div class="form-group"><label>Role / Title</label><input id="f_role" placeholder="e.g. Lead Technician"></div>
-        <div class="form-group"><label>Pay Type</label><select id="f_payType"><option value="hourly">Hourly</option><option value="salary">Salary</option></select></div>
+        <div class="form-group"><label>Worker Type</label><select id="f_workerType"><option value="W2">W2 Employee</option><option value="1099">1099 Contractor</option></select></div>
+        <div class="form-group"><label>Department</label><select id="f_department"><option value="Field">Field</option><option value="Office">Office</option></select></div>
+        <div class="form-group"><label>Pay Type</label><select id="f_payType"><option value="hourly">Hourly</option><option value="salary">Salary</option><option value="draw">Owner Draw</option></select></div>
         <div class="form-group"><label>Rate ($/hr or Annual $)</label><input type="number" id="f_rate" placeholder="0"></div>
-        <div class="form-group"><label>YTD Paid ($)</label><input type="number" id="f_ytd" value="0"></div>
       </div>
       <div class="form-actions">
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveRecord('payroll')">Save Employee</button>
+        <button class="btn btn-primary" onclick="savePayroll()">Save Employee</button>
       </div>`
   };
   $('modal-content').innerHTML=tpls[type]||'';
@@ -3330,6 +3492,7 @@ async function loadFromSupabase(){
         try{
           if(row.key==='overhead') db.overhead=JSON.parse(row.value)||[];
           if(row.key==='capitalEquipment') db.capitalEquipment=JSON.parse(row.value)||[];
+          if(row.key==='payRuns') db.payRuns=JSON.parse(row.value)||[];
           if(row.key==='deposits') db.deposits=JSON.parse(row.value)||db.deposits;
           if(row.key==='prior') db.prior=JSON.parse(row.value)||db.prior;
           changed=true;
